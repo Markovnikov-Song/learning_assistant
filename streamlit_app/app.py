@@ -41,6 +41,21 @@ except ImportError as e:
     st.stop()
 
 
+# 从 Streamlit Secrets 更新 settings
+# 这必须在导入 streamlit 后执行
+if hasattr(st, 'secrets'):
+    if 'LLM_API_KEY' in st.secrets:
+        settings.llm_api_key = st.secrets['LLM_API_KEY']
+    if 'LLM_BASE_URL' in st.secrets:
+        settings.llm_base_url = st.secrets['LLM_BASE_URL']
+    if 'LLM_CHAT_MODEL' in st.secrets:
+        settings.llm_chat_model = st.secrets['LLM_CHAT_MODEL']
+    if 'LLM_EMBEDDING_MODEL' in st.secrets:
+        settings.llm_embedding_model = st.secrets['LLM_EMBEDDING_MODEL']
+    if 'JWT_SECRET' in st.secrets:
+        settings.jwt_secret = st.secrets['JWT_SECRET']
+
+
 def _ensure_data_dir() -> None:
     # Streamlit Cloud: 使用持久化目录
     if "DATA_DIR" not in os.environ:
