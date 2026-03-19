@@ -1,0 +1,8 @@
+name: rag-assistant
+channels:
+  - conda-forge
+dependencies:
+  - python=3.10
+  - pip
+  # 说明：Windows 下包含大量 pip 依赖时，建议在环境创建完成后再手动 pip 安装
+

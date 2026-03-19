@@ -1,0 +1,147 @@
+from __future__ import annotations
+
+import shutil
+from pathlib import Path
+
+from langchain_core.documents import Document as LCDocument
+from sqlalchemy.orm import Session
+
+from app import models
+from app.services.chunking import split_pages
+from app.services.storage import sha256_file, subject_docs_dir
+from app.services.text_extract import extract_text_with_metadata
+from app.services.vectorstore import load_or_create, persist
+from app.settings import settings
+
+
+def save_upload(subject_id: str, upload_path: Path, original_name: str, mime_type: str, db: Session) -> models.Document:
+    docs_dir = subject_docs_dir(subject_id)
+    target = docs_dir / original_name
+    target.parent.mkdir(parents=True, exist_ok=True)
+    shutil.copy2(upload_path, target)
+    h = sha256_file(target)
+    size = target.stat().st_size
+
+    existing = (
+        db.query(models.Document)
+        .filter(models.Document.subject_id == subject_id, models.Document.source_name == original_name)
+        .one_or_none()
+    )
+    if existing and existing.sha256 == h and existing.status == "ready":
+        return existing
+
+    if existing:
+        # replace content and mark for re-ingest
+        existing.storage_path = str(target)
+        existing.mime_type = mime_type
+        existing.sha256 = h
+        existing.size_bytes = size
+        existing.status = "processing"
+        existing.error = ""
+        doc = existing
+        # remove old chunks
+        db.query(models.Chunk).filter(models.Chunk.document_id == existing.id).delete()
+    else:
+        doc = models.Document(
+            subject_id=subject_id,
+            source_name=original_name,
+            storage_path=str(target),
+            mime_type=mime_type,
+            sha256=h,
+            size_bytes=size,
+            status="processing",
+        )
+        db.add(doc)
+        db.flush()
+
+    db.commit()
+
+    try:
+        _ingest_document(doc, db)
+        doc.status = "ready"
+        doc.error = ""
+    except Exception as e:  # noqa: BLE001
+        doc.status = "failed"
+        doc.error = str(e)
+    finally:
+        db.add(doc)
+        db.commit()
+    return doc
+
+
+def _ingest_document(doc: models.Document, db: Session) -> None:
+    path = Path(doc.storage_path)
+    pages = extract_text_with_metadata(path)
+    chunks = split_pages(pages)
+    if not chunks:
+        raise ValueError("未提取到可用文本（可能是扫描版/加密/损坏文件）。")
+
+    # Persist chunks to DB first (强制元数据标注)
+    for i, c in enumerate(chunks):
+        db.add(
+            models.Chunk(
+                subject_id=doc.subject_id,
+                document_id=doc.id,
+                chunk_index=i,
+                text=c.text,
+                page_or_section=c.page_or_section,
+                position_hint=c.position_hint,
+            )
+        )
+    db.commit()
+
+    # Then upsert into subject vectorstore
+    store = load_or_create(doc.subject_id)
+    # Remove dummy init docs later by filtering at retrieval time.
+    lc_docs: list[LCDocument] = []
+    for ch in db.query(models.Chunk).filter(models.Chunk.document_id == doc.id).order_by(models.Chunk.chunk_index).all():
+        lc_docs.append(
+            LCDocument(
+                page_content=ch.text,
+                metadata={
+                    "subject_id": doc.subject_id,
+                    "document_id": doc.id,
+                    "chunk_id": ch.id,
+                    "source_name": doc.source_name,
+                    "page_or_section": ch.page_or_section,
+                    "position_hint": ch.position_hint,
+                },
+            )
+        )
+    store.add_documents(lc_docs)
+    persist(doc.subject_id, store)
+
+
+def rebuild_subject_index(subject_id: str, db: Session) -> None:
+    """
+    When documents are deleted, rebuild to avoid stale vectors.
+    """
+    from langchain_community.vectorstores import FAISS
+    from app.services.embeddings import get_embeddings
+
+    chunks = db.query(models.Chunk).filter(models.Chunk.subject_id == subject_id).all()
+    if not chunks:
+        # reset by removing folder
+        vec_dir = settings.data_dir / "subjects" / subject_id / "vectorstore"
+        if vec_dir.exists():
+            shutil.rmtree(vec_dir, ignore_errors=True)
+        return
+    docs: list[LCDocument] = []
+    for ch in chunks:
+        doc = db.query(models.Document).filter(models.Document.id == ch.document_id).one()
+        docs.append(
+            LCDocument(
+                page_content=ch.text,
+                metadata={
+                    "subject_id": subject_id,
+                    "document_id": ch.document_id,
+                    "chunk_id": ch.id,
+                    "source_name": doc.source_name,
+                    "page_or_section": ch.page_or_section,
+                    "position_hint": ch.position_hint,
+                },
+            )
+        )
+    store = FAISS.from_documents(docs, get_embeddings())
+    persist(subject_id, store)
+
