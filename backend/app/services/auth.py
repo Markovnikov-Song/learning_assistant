@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import hashlib
 import secrets
 from datetime import datetime, timedelta
 from typing import Annotated
@@ -7,28 +8,61 @@ from typing import Annotated
 from fastapi import Depends, HTTPException, status
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from jose import JWTError, jwt
-from passlib.context import CryptContext
 from sqlalchemy.orm import Session
 
 from backend.app.db import SessionLocal
 from backend.app.models import User
 from backend.app.settings import settings
 
-# 密码哈希上下文
-pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
-
 # HTTP Bearer 认证
 security = HTTPBearer()
+
+# 密码哈希配置
+HASH_ALGORITHM = "pbkdf2_hmac_sha256"
+HASH_ITERATIONS = 100000
+HASH_SALT_LENGTH = 32
+
+
+def _hash_password(password: str, salt: bytes | None = None) -> tuple[bytes, bytes]:
+    """使用 PBKDF2-HMAC-SHA256 哈希密码"""
+    if salt is None:
+        salt = secrets.token_bytes(HASH_SALT_LENGTH)
+    password_bytes = password.encode('utf-8')
+    hash_bytes = hashlib.pbkdf2_hmac(
+        'sha256',
+        password_bytes,
+        salt,
+        HASH_ITERATIONS
+    )
+    return hash_bytes, salt
+
+
+def get_password_hash(password: str) -> str:
+    """生成密码哈希（返回格式：iterations$salt$hash）"""
+    hash_bytes, salt = _hash_password(password)
+    salt_hex = salt.hex()
+    hash_hex = hash_bytes.hex()
+    return f"{HASH_ITERATIONS}${salt_hex}${hash_hex}"
 
 
 def verify_password(plain_password: str, hashed_password: str) -> bool:
     """验证密码"""
-    return pwd_context.verify(plain_password, hashed_password)
+    try:
+        iterations_hex, salt_hex, hash_hex = hashed_password.split('$')
+        iterations = int(iterations_hex)
+        salt = bytes.fromhex(salt_hex)
+        stored_hash = bytes.fromhex(hash_hex)
 
-
-def get_password_hash(password: str) -> str:
-    """生成密码哈希"""
-    return pwd_context.hash(password)
+        password_bytes = plain_password.encode('utf-8')
+        computed_hash = hashlib.pbkdf2_hmac(
+            'sha256',
+            password_bytes,
+            salt,
+            iterations
+        )
+        return secrets.compare_digest(computed_hash, stored_hash)
+    except Exception:
+        return False
 
 
 def create_access_token(data: dict, expires_delta: timedelta | None = None) -> str:
