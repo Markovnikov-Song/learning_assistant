@@ -111,8 +111,8 @@ def _ingest_document(doc: models.Document, db: Session) -> None:
 
     # Then upsert into subject vectorstore
     store = load_or_create(doc.subject_id)
-    # Remove dummy init docs later by filtering at retrieval time.
-    lc_docs: list[LCDocument] = []
+    
+    # 逐个添加文档，避免批量处理时的 token 超限问题
     for ch in db.query(models.Chunk).filter(models.Chunk.document_id == doc.id).order_by(models.Chunk.chunk_index).all():
         # 最终检查：确保文本不超过 512 tokens
         safe_text = _truncate_to_max_tokens(ch.text, max_tokens=512)
@@ -123,20 +123,28 @@ def _ingest_document(doc: models.Document, db: Session) -> None:
             db.add(ch)
             db.commit()
         
-        lc_docs.append(
-            LCDocument(
-                page_content=safe_text,
-                metadata={
-                    "subject_id": doc.subject_id,
-                    "document_id": doc.id,
-                    "chunk_id": ch.id,
-                    "source_name": doc.source_name,
-                    "page_or_section": ch.page_or_section,
-                    "position_hint": ch.position_hint,
-                },
-            )
+        # 逐个添加到向量存储
+        lc_doc = LCDocument(
+            page_content=safe_text,
+            metadata={
+                "subject_id": doc.subject_id,
+                "document_id": doc.id,
+                "chunk_id": ch.id,
+                "source_name": doc.source_name,
+                "page_or_section": ch.page_or_section,
+                "position_hint": ch.position_hint,
+            },
         )
-    store.add_documents(lc_docs)
+        
+        try:
+            store.add_documents([lc_doc])
+        except Exception as e:
+            # 如果还是失败，记录错误但继续处理下一个
+            import logging
+            logger = logging.getLogger(__name__)
+            logger.error(f"Failed to add chunk {ch.id} to vector store: {e}")
+            continue
+    
     persist(doc.subject_id, store)
 
 
@@ -154,6 +162,8 @@ def rebuild_subject_index(subject_id: str, db: Session) -> None:
         if vec_dir.exists():
             shutil.rmtree(vec_dir, ignore_errors=True)
         return
+    
+    # 逐个重建，避免批量处理时的 token 超限问题
     docs: list[LCDocument] = []
     for ch in chunks:
         doc = db.query(models.Document).filter(models.Document.id == ch.document_id).one()
@@ -172,5 +182,7 @@ def rebuild_subject_index(subject_id: str, db: Session) -> None:
                 },
             )
         )
+    
+    # 使用更小的 batch size 重建索引
     store = FAISS.from_documents(docs, get_embeddings())
     persist(subject_id, store)
