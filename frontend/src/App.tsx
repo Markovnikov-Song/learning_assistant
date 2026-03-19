@@ -40,6 +40,12 @@ function App() {
   const [err, setErr] = useState<string>('')
   const [successMsg, setSuccessMsg] = useState<string>('')
 
+  // 拍照相关
+  const [questionImage, setQuestionImage] = useState<File | null>(null)
+  const [questionImagePreview, setQuestionImagePreview] = useState<string | null>(null)
+  const [solveImage, setSolveImage] = useState<File | null>(null)
+  const [solveImagePreview, setSolveImagePreview] = useState<string | null>(null)
+
   // 检查认证状态
   useEffect(() => {
     const token = auth.getToken()
@@ -451,6 +457,26 @@ function App() {
             disabled={!activeSubjectId}
           />
           <div className="row">
+            <label className="photo-button">
+              <span>📷 拍照</span>
+              <input
+                type="file"
+                accept="image/*"
+                capture="camera"
+                style={{ display: 'none' }}
+                onChange={(e) => {
+                  const file = e.target.files?.[0]
+                  if (file) {
+                    setQuestionImage(file)
+                    const reader = new FileReader()
+                    reader.onloadend = () => {
+                      setQuestionImagePreview(reader.result as string)
+                    }
+                    reader.readAsDataURL(file)
+                  }
+                }}
+              />
+            </label>
             <button
               disabled={!activeSubjectId || !question.trim()}
               onClick={async () => {
@@ -459,6 +485,13 @@ function App() {
                 setBusy('检索并回答…')
                 setAskResp(null)
                 try {
+                  // 如果有图片，先上传图片
+                  if (questionImage) {
+                    await api.uploadDoc(activeSubjectId, questionImage)
+                    await refreshDocs(activeSubjectId)
+                    setQuestionImage(null)
+                    setQuestionImagePreview(null)
+                  }
                   const r = await api.ask(activeSubjectId, question.trim())
                   setAskResp(r)
                 } catch (e: any) {
@@ -474,11 +507,27 @@ function App() {
               onClick={() => {
                 setAskResp(null)
                 setQuestion('')
+                setQuestionImage(null)
+                setQuestionImagePreview(null)
               }}
             >
               清空
             </button>
           </div>
+          {questionImagePreview && (
+            <div className="image-preview">
+              <img src={questionImagePreview} alt="预览" />
+              <button
+                className="remove-image"
+                onClick={() => {
+                  setQuestionImage(null)
+                  setQuestionImagePreview(null)
+                }}
+              >
+                ✕
+              </button>
+            </div>
+          )}
 
           {askResp ? (
             <div className="out">
@@ -510,6 +559,26 @@ function App() {
             disabled={!activeSubjectId}
           />
           <div className="row">
+            <label className="photo-button">
+              <span>📷 拍照</span>
+              <input
+                type="file"
+                accept="image/*"
+                capture="camera"
+                style={{ display: 'none' }}
+                onChange={(e) => {
+                  const file = e.target.files?.[0]
+                  if (file) {
+                    setSolveImage(file)
+                    const reader = new FileReader()
+                    reader.onloadend = () => {
+                      setSolveImagePreview(reader.result as string)
+                    }
+                    reader.readAsDataURL(file)
+                  }
+                }}
+              />
+            </label>
             <button
               disabled={!activeSubjectId || !problem.trim()}
               onClick={async () => {
@@ -518,6 +587,13 @@ function App() {
                 setBusy('检索并解题…')
                 setSolveResp(null)
                 try {
+                  // 如果有图片，先上传图片
+                  if (solveImage) {
+                    await api.uploadDoc(activeSubjectId, solveImage)
+                    await refreshDocs(activeSubjectId)
+                    setSolveImage(null)
+                    setSolveImagePreview(null)
+                  }
                   const r = await api.solve(activeSubjectId, problem.trim())
                   setSolveResp(r)
                 } catch (e: any) {
@@ -533,11 +609,27 @@ function App() {
               onClick={() => {
                 setSolveResp(null)
                 setProblem('')
+                setSolveImage(null)
+                setSolveImagePreview(null)
               }}
             >
               清空
             </button>
           </div>
+          {solveImagePreview && (
+            <div className="image-preview">
+              <img src={solveImagePreview} alt="预览" />
+              <button
+                className="remove-image"
+                onClick={() => {
+                  setSolveImage(null)
+                  setSolveImagePreview(null)
+                }}
+              >
+                ✕
+              </button>
+            </div>
+          )}
 
           {solveResp ? (
             <div className="out">
