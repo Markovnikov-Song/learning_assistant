@@ -33,9 +33,9 @@ _ensure_data_dir()
 init_db()
 
 
-st.set_page_config(page_title="learning_assistant", layout="wide")
-st.title("learning_assistant · 学科专属 RAG 智能学习助手")
-st.caption("严格资料内生成 · 学科隔离 · 理工科优先（无证据即拒答）")
+st.set_page_config(page_title="学习助手", layout="wide")
+st.title("学科专属学习助手")
+st.caption("基于上传资料的智能问答与解题系统")
 
 
 @st.cache_data(show_spinner=False)
@@ -77,7 +77,7 @@ subject_id = None if subj_label == "（新建/选择）" else subj_options[subj_
 col1, col2 = st.columns([1, 1], gap="large")
 
 with col1:
-    st.subheader("① 上传资料入库（当前学科）")
+    st.subheader("上传资料入库")
     if not subject_id:
         st.info("请先在左侧选择或创建一个学科。")
     else:
@@ -123,7 +123,7 @@ with col1:
 
 
 with col2:
-    st.subheader("② 学科内问答 / 解题（严格资料内）")
+    st.subheader("学科内问答 / 解题")
     if not subject_id:
         st.info("先选择学科并上传资料。")
     else:
@@ -154,10 +154,4 @@ with col2:
                     st.markdown("### 来源")
                     for c in cites:
                         st.write(f"- `{c.source_name}` · {c.page_or_section} · {c.position_hint}")
-
-
-st.divider()
-st.caption(
-    f"当前配置：top_k={settings.retrieval_top_k} · temperature={settings.temperature} · OCR={'开' if settings.ocr_enabled else '关'}"
-)
 
