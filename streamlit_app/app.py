@@ -5,9 +5,19 @@ from __future__ import annotations
 import sys
 import os
 
-# 获取当前文件的上级目录（learning_assistant/），作为根路径
-ROOT_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), "../"))
-sys.path.insert(0, ROOT_DIR)  # 插入到 sys.path 最前面，优先加载 backend
+# 获取当前文件的目录
+CURRENT_DIR = os.path.dirname(os.path.abspath(__file__))
+# 获取项目根目录（learning_assistant/）
+ROOT_DIR = os.path.abspath(os.path.join(CURRENT_DIR, "../"))
+
+# 确保根目录在sys.path中
+if ROOT_DIR not in sys.path:
+    sys.path.insert(0, ROOT_DIR)
+
+# 确保backend目录在sys.path中
+BACKEND_DIR = os.path.join(ROOT_DIR, "backend")
+if BACKEND_DIR not in sys.path:
+    sys.path.insert(0, BACKEND_DIR)
 
 # 3. 其他基础导入
 import tempfile
