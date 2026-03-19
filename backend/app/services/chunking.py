@@ -17,17 +17,32 @@ class ChunkWithMeta:
 
 
 def _token_len(text: str) -> int:
-    # cl100k_base covers most OpenAI-compatible tokenization needs
+    """计算文本的 token 数量"""
     enc = tiktoken.get_encoding("cl100k_base")
     return len(enc.encode(text))
 
 
+def _truncate_to_max_tokens(text: str, max_tokens: int = 512) -> str:
+    """截断文本到最大 token 数"""
+    token_count = _token_len(text)
+    if token_count <= max_tokens:
+        return text
+    
+    # 截断到最大 token 数
+    enc = tiktoken.get_encoding("cl100k_base")
+    tokens = enc.encode(text)[:max_tokens]
+    return enc.decode(tokens)
+
+
 def split_pages(pages: list[ExtractedPage]) -> list[ChunkWithMeta]:
-    # 使用更小的 chunk_size 以确保不超过模型限制
-    # 硅基流动的 BAAI/bge-large-zh-v1.5 模型限制为 512 tokens
-    # 我们使用 400 tokens 作为安全值，留有余量
-    safe_chunk_size = 400
-    safe_overlap = 80
+    """
+    分割页面文本为多个块
+    确保每个块都不超过 512 tokens
+    """
+    # 使用保守的 chunk_size，确保分割后的块不会太大
+    # 考虑到中文可能占用更多 tokens，使用 350 作为 chunk_size
+    safe_chunk_size = 350
+    safe_overlap = 50
     
     separators = ["\n\n", "\n", "。", ".", " ", ""]
     splitter = RecursiveCharacterTextSplitter(
@@ -41,20 +56,32 @@ def split_pages(pages: list[ExtractedPage]) -> list[ChunkWithMeta]:
     for p in pages:
         if not p.text.strip():
             continue
-        for idx, c in enumerate(splitter.split_text(p.text)):
-            # 二次检查：确保不超过 512 tokens
-            token_count = _token_len(c)
-            if token_count > 512:
-                # 如果仍然太大，强制截断
-                enc = tiktoken.get_encoding("cl100k_base")
-                tokens = enc.encode(c)[:512]  # 只保留前 512 个 tokens
-                c = enc.decode(tokens)
+        
+        # 分割文本
+        split_texts = splitter.split_text(p.text)
+        
+        for idx, c in enumerate(split_texts):
+            # 强制截断到 512 tokens 以内
+            truncated_text = _truncate_to_max_tokens(c, max_tokens=512)
+            
+            # 验证截断后的文本
+            final_token_count = _token_len(truncated_text)
+            if final_token_count > 512:
+                # 如果还是太大（理论上不应该发生），再次截断
+                truncated_text = _truncate_to_max_tokens(truncated_text, max_tokens=480)
+                final_token_count = _token_len(truncated_text)
+                
+                if final_token_count > 512:
+                    # 极端情况：直接取前 300 个字符
+                    truncated_text = truncated_text[:300]
+                    final_token_count = _token_len(truncated_text)
             
             chunks.append(
                 ChunkWithMeta(
-                    text=c,
+                    text=truncated_text,
                     page_or_section=p.page_or_section,
                     position_hint=f"{p.position_hint}:{idx}",
                 )
             )
+    
     return chunks

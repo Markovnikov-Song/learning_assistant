@@ -3,6 +3,7 @@ from __future__ import annotations
 import shutil
 from pathlib import Path
 
+import tiktoken
 from langchain_core.documents import Document as LCDocument
 from sqlalchemy.orm import Session
 
@@ -12,6 +13,24 @@ from backend.app.services.storage import sha256_file, subject_docs_dir
 from backend.app.services.text_extract import extract_text_with_metadata
 from backend.app.services.vectorstore import load_or_create, persist
 from backend.app.settings import settings
+
+
+def _token_len(text: str) -> int:
+    """计算文本的 token 数量"""
+    enc = tiktoken.get_encoding("cl100k_base")
+    return len(enc.encode(text))
+
+
+def _truncate_to_max_tokens(text: str, max_tokens: int = 512) -> str:
+    """截断文本到最大 token 数"""
+    token_count = _token_len(text)
+    if token_count <= max_tokens:
+        return text
+    
+    # 截断到最大 token 数
+    enc = tiktoken.get_encoding("cl100k_base")
+    tokens = enc.encode(text)[:max_tokens]
+    return enc.decode(tokens)
 
 
 def save_upload(subject_id: str, upload_path: Path, original_name: str, mime_type: str, db: Session) -> models.Document:
@@ -95,9 +114,18 @@ def _ingest_document(doc: models.Document, db: Session) -> None:
     # Remove dummy init docs later by filtering at retrieval time.
     lc_docs: list[LCDocument] = []
     for ch in db.query(models.Chunk).filter(models.Chunk.document_id == doc.id).order_by(models.Chunk.chunk_index).all():
+        # 最终检查：确保文本不超过 512 tokens
+        safe_text = _truncate_to_max_tokens(ch.text, max_tokens=512)
+        
+        # 如果文本被截断了，更新数据库
+        if safe_text != ch.text:
+            ch.text = safe_text
+            db.add(ch)
+            db.commit()
+        
         lc_docs.append(
             LCDocument(
-                page_content=ch.text,
+                page_content=safe_text,
                 metadata={
                     "subject_id": doc.subject_id,
                     "document_id": doc.id,
@@ -129,9 +157,11 @@ def rebuild_subject_index(subject_id: str, db: Session) -> None:
     docs: list[LCDocument] = []
     for ch in chunks:
         doc = db.query(models.Document).filter(models.Document.id == ch.document_id).one()
+        # 重建时也检查 token 数量
+        safe_text = _truncate_to_max_tokens(ch.text, max_tokens=512)
         docs.append(
             LCDocument(
-                page_content=ch.text,
+                page_content=safe_text,
                 metadata={
                     "subject_id": subject_id,
                     "document_id": ch.document_id,
@@ -144,4 +174,3 @@ def rebuild_subject_index(subject_id: str, db: Session) -> None:
         )
     store = FAISS.from_documents(docs, get_embeddings())
     persist(subject_id, store)
-
