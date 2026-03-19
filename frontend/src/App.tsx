@@ -292,6 +292,33 @@ function App() {
             >
               刷新
             </button>
+            {activeSubjectId && (
+              <button
+                className="danger"
+                onClick={async () => {
+                  if (!confirm('确定要删除当前学科吗？此操作将删除该学科下的所有资料和向量索引，且无法恢复！')) {
+                    return
+                  }
+                  setErr('')
+                  setSuccessMsg('')
+                  setBusy('删除学科…')
+                  try {
+                    await api.deleteSubject(activeSubjectId)
+                    setSuccessMsg('学科已删除')
+                    setActiveSubjectId('')
+                    setDocs([])
+                    await refreshSubjects()
+                    setTimeout(() => setSuccessMsg(''), 3000)
+                  } catch (e: any) {
+                    setErr(String(e?.message || e))
+                  } finally {
+                    setBusy('')
+                  }
+                }}
+              >
+                删除
+              </button>
+            )}
           </div>
 
           <div className="subcard">

@@ -20,6 +20,7 @@ if BACKEND_DIR not in sys.path:
     sys.path.insert(0, BACKEND_DIR)
 
 # 3. 其他基础导入
+import shutil
 import tempfile
 from pathlib import Path
 
@@ -142,7 +143,7 @@ if not st.session_state.logged_in:
 
 # 主应用（已登录）
 st.title("学科专属学习助手")
-st.caption(f"欢迎，{st.session_state.username} ({'管理员' if st.session_state.is_admin else '普通用户'}) - 基于上传资料的智能问答与解题系统")
+st.caption(f"欢迎，{st.session_state.username} - 基于上传资料的智能问答与解题系统")
 
 if st.button("退出登录"):
     st.session_state.logged_in = False
@@ -170,6 +171,23 @@ with st.sidebar:
     subjects = list_subjects()
     subj_options = {f"{s['name']}（{s['category']}）": s["id"] for s in subjects}
     subj_label = st.selectbox("选择学科", options=["（新建/选择）"] + list(subj_options.keys()))
+
+    # 删除学科按钮
+    if subj_label != "（新建/选择）":
+        if st.button("🗑️ 删除当前学科", type="secondary", use_container_width=True):
+            with SessionLocal() as db:
+                s = db.query(models.Subject).filter(models.Subject.id == subj_options[subj_label]).first()
+                if s:
+                    # 删除学科（级联删除文档和向量索引）
+                    db.delete(s)
+                    db.commit()
+                    # 删除磁盘上的学科文件夹
+                    subject_folder = settings.data_dir / "subjects" / s.id
+                    if subject_folder.exists():
+                        shutil.rmtree(subject_folder, ignore_errors=True)
+                    st.toast(f"学科「{s.name}」已删除", icon="🗑️")
+                    refresh_subjects()
+                    st.rerun()
 
     st.divider()
     st.markdown("**新建学科**")
