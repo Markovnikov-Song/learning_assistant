@@ -166,6 +166,11 @@ button.danger {
   background: rgba(110, 255, 179, 0.08);
 }
 
+.pill.success {
+  border-color: rgba(42, 92, 255, 0.22);
+  background: rgba(42, 92, 255, 0.08);
+}
+
 .pill.busy {
   border-color: rgba(255, 208, 96, 0.25);
   background: rgba(255, 208, 96, 0.1);

@@ -174,7 +174,7 @@ with st.sidebar:
     st.divider()
     st.markdown("**新建学科**")
     new_name = st.text_input("名称", placeholder="如：高等数学")
-    new_cat = st.selectbox("分类", ["理工科", "文科", "专业课", "公共课"], index=0)
+    new_cat = st.selectbox("分类", ["文科", "理科", "工科", "农学", "医学"], index=0)
     new_desc = st.text_input("描述（可选）")
     if st.button("创建学科", disabled=not new_name.strip()):
         with SessionLocal() as db:
@@ -182,7 +182,7 @@ with st.sidebar:
             db.add(s)
             db.commit()
         refresh_subjects()
-        st.success("已创建")
+        st.toast(f"学科「{new_name.strip()}」创建成功！", icon="✅")
         st.rerun()
 
 

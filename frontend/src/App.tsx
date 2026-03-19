@@ -28,7 +28,7 @@ function App() {
 
   const [createName, setCreateName] = useState('')
   const [createDesc, setCreateDesc] = useState('')
-  const [createCat, setCreateCat] = useState('理工科')
+  const [createCat, setCreateCat] = useState('理科')
 
   const [question, setQuestion] = useState('')
   const [askResp, setAskResp] = useState<AskResponse | null>(null)
@@ -38,6 +38,7 @@ function App() {
 
   const [busy, setBusy] = useState<string>('')
   const [err, setErr] = useState<string>('')
+  const [successMsg, setSuccessMsg] = useState<string>('')
 
   // 检查认证状态
   useEffect(() => {
@@ -257,6 +258,7 @@ function App() {
         </div>
         <div className="status">
           {busy ? <span className="pill busy">{busy}</span> : <span className="pill ok">就绪</span>}
+          {successMsg ? <span className="pill success">{successMsg}</span> : null}
           {err ? <span className="pill err">{err}</span> : null}
         </div>
       </header>
@@ -299,22 +301,26 @@ function App() {
               <input placeholder="描述（可选）" value={createDesc} onChange={(e) => setCreateDesc(e.target.value)} />
               <div className="row">
                 <select value={createCat} onChange={(e) => setCreateCat(e.target.value)}>
-                  <option value="理工科">理工科</option>
                   <option value="文科">文科</option>
-                  <option value="专业课">专业课</option>
-                  <option value="公共课">公共课</option>
+                  <option value="理科">理科</option>
+                  <option value="工科">工科</option>
+                  <option value="农学">农学</option>
+                  <option value="医学">医学</option>
                 </select>
                 <button
                   disabled={!createName.trim()}
                   onClick={async () => {
                     setErr('')
+                    setSuccessMsg('')
                     setBusy('创建学科…')
                     try {
                       const s = await api.createSubject({ name: createName.trim(), description: createDesc.trim(), category: createCat })
                       setCreateName('')
                       setCreateDesc('')
+                      setSuccessMsg(`学科「${s.name}」创建成功！`)
                       await refreshSubjects()
                       setActiveSubjectId(s.id)
+                      setTimeout(() => setSuccessMsg(''), 3000)
                     } catch (e: any) {
                       setErr(String(e?.message || e))
                     } finally {
