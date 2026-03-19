@@ -68,8 +68,8 @@ from backend.app.services.auth import (
 
 
 @app.post("/auth/register", response_model=TokenResponse)
-async def register(payload: UserRegister, db: Session = Depends(get_db), current_user: models.User = Depends(get_current_admin)) -> TokenResponse:
-    """注册新用户（仅管理员可用）"""
+async def register(payload: UserRegister, db: Session = Depends(get_db)) -> TokenResponse:
+    """注册新用户（开放注册）"""
     user = create_user(db, payload.username, payload.password, is_admin=False)
     access_token = create_access_token(data={"sub": user.id})
     return TokenResponse(

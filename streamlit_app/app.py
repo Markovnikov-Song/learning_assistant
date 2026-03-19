@@ -66,6 +66,8 @@ if "username" not in st.session_state:
     st.session_state.username = None
 if "is_admin" not in st.session_state:
     st.session_state.is_admin = False
+if "register_mode" not in st.session_state:
+    st.session_state.register_mode = False
 
 
 # 登录界面
@@ -73,24 +75,66 @@ if not st.session_state.logged_in:
     st.title("学科专属学习助手")
     st.caption("基于上传资料的智能问答与解题系统")
 
-    with st.form("login_form"):
-        st.subheader("登录")
-        username = st.text_input("用户名", placeholder="请输入用户名")
-        password = st.text_input("密码", type="password", placeholder="请输入密码")
-        submit = st.form_submit_button("登录")
+    # 登录/注册切换
+    col1, col2 = st.columns(2)
+    with col1:
+        if st.button("登录", use_container_width=True):
+            st.session_state.register_mode = False
+            st.rerun()
+    with col2:
+        if st.button("注册", use_container_width=True):
+            st.session_state.register_mode = True
+            st.rerun()
 
-        if submit:
-            with SessionLocal() as db:
-                user = authenticate_user(db, username, password)
-                if user:
-                    st.session_state.logged_in = True
-                    st.session_state.user_id = user.id
-                    st.session_state.username = user.username
-                    st.session_state.is_admin = user.is_admin
-                    st.success(f"登录成功！欢迎，{user.username}")
-                    st.rerun()
+    if st.session_state.register_mode:
+        # 注册表单
+        with st.form("register_form"):
+            st.subheader("注册新账户")
+            username = st.text_input("用户名", placeholder="请输入用户名（至少3个字符）")
+            password = st.text_input("密码", type="password", placeholder="请输入密码（至少6个字符）")
+            confirm_password = st.text_input("确认密码", type="password", placeholder="请再次输入密码")
+            submit = st.form_submit_button("注册")
+
+            if submit:
+                if len(username) < 3:
+                    st.error("用户名至少需要3个字符")
+                elif len(password) < 6:
+                    st.error("密码至少需要6个字符")
+                elif password != confirm_password:
+                    st.error("两次输入的密码不一致")
                 else:
-                    st.error("用户名或密码错误")
+                    try:
+                        with SessionLocal() as db:
+                            user = create_user(db, username, password, is_admin=False)
+                            st.success(f"注册成功！欢迎，{user.username}")
+                            # 自动登录
+                            st.session_state.logged_in = True
+                            st.session_state.user_id = user.id
+                            st.session_state.username = user.username
+                            st.session_state.is_admin = user.is_admin
+                            st.rerun()
+                    except HTTPException as e:
+                        st.error(e.detail)
+    else:
+        # 登录表单
+        with st.form("login_form"):
+            st.subheader("登录")
+            username = st.text_input("用户名", placeholder="请输入用户名")
+            password = st.text_input("密码", type="password", placeholder="请输入密码")
+            submit = st.form_submit_button("登录")
+
+            if submit:
+                with SessionLocal() as db:
+                    user = authenticate_user(db, username, password)
+                    if user:
+                        st.session_state.logged_in = True
+                        st.session_state.user_id = user.id
+                        st.session_state.username = user.username
+                        st.session_state.is_admin = user.is_admin
+                        st.success(f"登录成功！欢迎，{user.username}")
+                        st.rerun()
+                    else:
+                        st.error("用户名或密码错误")
 
     st.stop()
 

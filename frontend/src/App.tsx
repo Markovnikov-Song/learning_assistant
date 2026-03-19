@@ -7,8 +7,12 @@ function App() {
   // 认证状态
   const [user, setUser] = useState<User | null>(null)
   const [isAuthenticated, setIsAuthenticated] = useState(false)
+  const [registerMode, setRegisterMode] = useState(false)
   const [loginUsername, setLoginUsername] = useState('')
   const [loginPassword, setLoginPassword] = useState('')
+  const [registerUsername, setRegisterUsername] = useState('')
+  const [registerPassword, setRegisterPassword] = useState('')
+  const [confirmPassword, setConfirmPassword] = useState('')
   const [authBusy, setAuthBusy] = useState(false)
   const [authErr, setAuthErr] = useState('')
 
@@ -84,39 +88,134 @@ function App() {
     setSolveResp(null)
   }
 
+  async function handleRegister(e: React.FormEvent) {
+    e.preventDefault()
+    setAuthErr('')
+
+    // 验证
+    if (registerUsername.length < 3) {
+      setAuthErr('用户名至少需要3个字符')
+      return
+    }
+    if (registerPassword.length < 6) {
+      setAuthErr('密码至少需要6个字符')
+      return
+    }
+    if (registerPassword !== confirmPassword) {
+      setAuthErr('两次输入的密码不一致')
+      return
+    }
+
+    setAuthBusy(true)
+    try {
+      const resp = await api.register(registerUsername, registerPassword, '')
+      auth.setToken(resp.access_token)
+      setUser(resp.user)
+      setIsAuthenticated(true)
+      setRegisterUsername('')
+      setRegisterPassword('')
+      setConfirmPassword('')
+    } catch (e: any) {
+      setAuthErr(String(e?.message || e) || '注册失败')
+    } finally {
+      setAuthBusy(false)
+    }
+  }
+
   // 如果未认证，显示登录界面
   if (!isAuthenticated) {
     return (
       <div className="login-page">
         <div className="login-card">
           <h1>学科专属 RAG 学习助手</h1>
-          <p className="login-subtitle">请登录以继续</p>
-          <form onSubmit={handleLogin} className="login-form">
-            <div className="form-group">
-              <label>用户名</label>
-              <input
-                type="text"
-                value={loginUsername}
-                onChange={(e) => setLoginUsername(e.target.value)}
-                placeholder="请输入用户名"
-                required
-              />
-            </div>
-            <div className="form-group">
-              <label>密码</label>
-              <input
-                type="password"
-                value={loginPassword}
-                onChange={(e) => setLoginPassword(e.target.value)}
-                placeholder="请输入密码"
-                required
-              />
-            </div>
-            {authErr && <div className="error-message">{authErr}</div>}
-            <button type="submit" disabled={authBusy}>
-              {authBusy ? '登录中...' : '登录'}
+          <p className="login-subtitle">{registerMode ? '注册新账户' : '请登录以继续'}</p>
+
+          {/* 登录/注册切换 */}
+          <div className="auth-switch">
+            <button
+              className={`auth-switch-btn ${!registerMode ? 'active' : ''}`}
+              onClick={() => setRegisterMode(false)}
+            >
+              登录
             </button>
-          </form>
+            <button
+              className={`auth-switch-btn ${registerMode ? 'active' : ''}`}
+              onClick={() => setRegisterMode(true)}
+            >
+              注册
+            </button>
+          </div>
+
+          {registerMode ? (
+            // 注册表单
+            <form onSubmit={handleRegister} className="login-form">
+              <div className="form-group">
+                <label>用户名</label>
+                <input
+                  type="text"
+                  value={registerUsername}
+                  onChange={(e) => setRegisterUsername(e.target.value)}
+                  placeholder="请输入用户名（至少3个字符）"
+                  required
+                  minLength={3}
+                />
+              </div>
+              <div className="form-group">
+                <label>密码</label>
+                <input
+                  type="password"
+                  value={registerPassword}
+                  onChange={(e) => setRegisterPassword(e.target.value)}
+                  placeholder="请输入密码（至少6个字符）"
+                  required
+                  minLength={6}
+                />
+              </div>
+              <div className="form-group">
+                <label>确认密码</label>
+                <input
+                  type="password"
+                  value={confirmPassword}
+                  onChange={(e) => setConfirmPassword(e.target.value)}
+                  placeholder="请再次输入密码"
+                  required
+                  minLength={6}
+                />
+              </div>
+              {authErr && <div className="error-message">{authErr}</div>}
+              <button type="submit" disabled={authBusy}>
+                {authBusy ? '注册中...' : '注册'}
+              </button>
+            </form>
+          ) : (
+            // 登录表单
+            <form onSubmit={handleLogin} className="login-form">
+              <div className="form-group">
+                <label>用户名</label>
+                <input
+                  type="text"
+                  value={loginUsername}
+                  onChange={(e) => setLoginUsername(e.target.value)}
+                  placeholder="请输入用户名"
+                  required
+                />
+              </div>
+              <div className="form-group">
+                <label>密码</label>
+                <input
+                  type="password"
+                  value={loginPassword}
+                  onChange={(e) => setLoginPassword(e.target.value)}
+                  placeholder="请输入密码"
+                  required
+                />
+              </div>
+              {authErr && <div className="error-message">{authErr}</div>}
+              <button type="submit" disabled={authBusy}>
+                {authBusy ? '登录中...' : '登录'}
+              </button>
+            </form>
+          )}
         </div>
       </div>
     )
