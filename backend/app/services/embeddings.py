@@ -15,6 +15,13 @@ def get_embeddings() -> Embeddings:
     获取OpenAI兼容的嵌入模型实例
     base_url允许使用DeepSeek/硅基流动等网关
     """
+    # 检查 API key 是否配置
+    if not settings.llm_api_key:
+        raise ValueError(
+            "未配置 LLM API Key。请在环境变量中设置 LLM_API_KEY。\n"
+            "示例：LLM_API_KEY=your-api-key-here"
+        )
+    
     try:
         return OpenAIEmbeddings(
             model=settings.llm_embedding_model,
@@ -34,6 +41,13 @@ def get_embeddings_with_options(
     """
     获取带有自定义选项的嵌入模型实例
     """
+    # 检查 API key 是否配置
+    if not settings.llm_api_key:
+        raise ValueError(
+            "未配置 LLM API Key。请在环境变量中设置 LLM_API_KEY。\n"
+            "示例：LLM_API_KEY=your-api-key-here"
+        )
+    
     try:
         return OpenAIEmbeddings(
             model=model or settings.llm_embedding_model,
@@ -45,4 +59,3 @@ def get_embeddings_with_options(
         )
     except Exception as e:
         raise ValueError(f"Failed to initialize embeddings with options: {str(e)}")
-

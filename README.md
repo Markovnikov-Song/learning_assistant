@@ -81,15 +81,27 @@ LLM_EMBEDDING_MODEL=text-embedding-3-large
 
 ### Streamlit Cloud 配置
 
+**⚠️ 重要**：必须配置 LLM_API_KEY 才能使用问答和解题功能。
+
 在 Streamlit Cloud 的 Secrets 中添加：
 
 ```toml
 JWT_SECRET = "your-secret-key-here"
+
+# 必需：LLM API 配置
 LLM_API_KEY = "your-api-key-here"
-LLM_BASE_URL = "https://api.openai.com/v1"
+LLM_BASE_URL = "https://api.openai.com/v1"  # 可选，使用 DeepSeek/通义等请修改
 LLM_CHAT_MODEL = "gpt-4o-mini"
 LLM_EMBEDDING_MODEL = "text-embedding-3-large"
+
+# 可选：OCR 配置（默认关闭以减少依赖）
+# OCR_ENABLED = false
 ```
+
+**API Key 获取**：
+- OpenAI: https://platform.openai.com/api-keys
+- DeepSeek: https://platform.deepseek.com/api_keys
+- 通义千问: https://dashscope.console.aliyun.com/apiKey
 
 ## 技术栈
 
