@@ -42,9 +42,15 @@ except ImportError as e:
 
 
 def _ensure_data_dir() -> None:
-    # Streamlit Cloud: prefer writable local folder
+    # Streamlit Cloud: 使用持久化目录
     if "DATA_DIR" not in os.environ:
-        os.environ["DATA_DIR"] = str(Path("data").absolute())
+        # 优先使用 Streamlit Cloud 的持久化目录
+        # 如果不存在，使用相对路径
+        data_path = Path("/mount/data")
+        if data_path.exists() or os.path.exists("/mount"):
+            os.environ["DATA_DIR"] = str(data_path.absolute())
+        else:
+            os.environ["DATA_DIR"] = str(Path("data").absolute())
 
 
 _ensure_data_dir()
@@ -219,6 +225,9 @@ with col1:
             accept_multiple_files=False,
         )
         if up is not None:
+            doc_status = None
+            doc_source_name = None
+            doc_error = None
             with st.spinner("上传并解析入库中…"):
                 with tempfile.TemporaryDirectory() as td:
                     tmp_path = Path(td) / up.name
@@ -231,10 +240,14 @@ with col1:
                             mime_type=up.type or "application/octet-stream",
                             db=db,
                         )
-            if doc.status == "ready":
-                st.success(f"入库完成：{doc.source_name}")
+                        # 在会话关闭前获取需要的属性
+                        doc_status = doc.status
+                        doc_source_name = doc.source_name
+                        doc_error = doc.error
+            if doc_status == "ready":
+                st.success(f"入库完成：{doc_source_name}")
             else:
-                st.error(f"入库失败：{doc.error or '未知错误'}")
+                st.error(f"入库失败：{doc_error or '未知错误'}")
 
         st.divider()
         st.markdown("**已上传资料**")
