@@ -26,5 +26,6 @@ def init_db() -> None:
     # 导入所有模型（确保 Base 能识别表结构）
     from backend.app import models  # noqa: F401
 
-    Base.metadata.create_all(bind=engine)
+    # 使用 checkfirst=True 确保只在表不存在时创建
+    Base.metadata.create_all(bind=engine, checkfirst=True)
 
