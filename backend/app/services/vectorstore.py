@@ -1,6 +1,8 @@
 from __future__ import annotations
 
+import hashlib
 import logging
+import os
 from pathlib import Path
 from typing import List, Optional
 
@@ -13,6 +15,7 @@ from backend.app.services.storage import subject_vector_dir
 
 logger = logging.getLogger(__name__)
 INDEX_NAME = "faiss_index"
+MAX_INDEX_SIZE = 500 * 1024 * 1024  # 500MB 最大索引大小
 
 
 def _index_path(subject_id: str) -> Path:
@@ -22,6 +25,33 @@ def _index_path(subject_id: str) -> Path:
     return subject_vector_dir(subject_id) / INDEX_NAME
 
 
+def _validate_index_file(p: Path) -> bool:
+    """
+    验证索引文件的安全性和完整性
+    """
+    try:
+        # 验证文件大小
+        file_size = p.stat().st_size
+        if file_size > MAX_INDEX_SIZE:
+            logger.error(f"Index file too large: {file_size} bytes")
+            return False
+
+        # 验证文件在正确的目录中
+        if not p.is_relative_to(Path("data")):
+            logger.error(f"Index file not in allowed directory: {p}")
+            return False
+
+        # 验证文件权限
+        if not os.access(p, os.R_OK):
+            logger.error(f"No read permission for index file: {p}")
+            return False
+
+        return True
+    except Exception as e:
+        logger.error(f"Error validating index file: {e}")
+        return False
+
+
 def load_or_create(subject_id: str) -> FAISS:
     """
     加载或创建FAISS向量存储
@@ -29,14 +59,21 @@ def load_or_create(subject_id: str) -> FAISS:
     try:
         p = _index_path(subject_id)
         embeddings = get_embeddings()
-        
+
         # 确保目录存在
         p.parent.mkdir(parents=True, exist_ok=True)
-        
+
         if p.exists():
+            # 验证文件安全性
+            if not _validate_index_file(p):
+                logger.error(f"Index file validation failed for subject {subject_id}")
+                # 创建新索引
+                logger.info(f"Creating new vector store for subject {subject_id}")
+                return FAISS.from_documents([LCDocument(page_content="__init__", metadata={"_init": True})], embeddings)
+
             logger.info(f"Loading existing vector store for subject {subject_id}")
             return FAISS.load_local(str(p), embeddings, allow_dangerous_deserialization=True)
-        
+
         logger.info(f"Creating new vector store for subject {subject_id}")
         # 创建空索引
         return FAISS.from_documents([LCDocument(page_content="__init__", metadata={"_init": True})], embeddings)

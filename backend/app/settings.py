@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import secrets
 from pathlib import Path
 from typing import Literal
 
@@ -31,7 +32,9 @@ class Settings(BaseSettings):
     ocr_lang: str = "ch"
 
     # Security (cloud mode)
-    jwt_secret: str = "CHANGE_ME"
+    # 生产环境请务必通过环境变量设置 JWT_SECRET
+    # 开发环境会自动生成一个随机值
+    jwt_secret: str = secrets.token_urlsafe(32)
 
 
 settings = Settings()

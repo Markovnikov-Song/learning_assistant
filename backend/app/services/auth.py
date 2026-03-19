@@ -99,7 +99,7 @@ def get_db():
         db.close()
 
 
-async def get_current_user(
+def get_current_user(
     credentials: Annotated[HTTPAuthorizationCredentials, Depends(security)],
     db: Session = Depends(get_db),
 ) -> User:
@@ -123,7 +123,7 @@ async def get_current_user(
     return user
 
 
-async def get_current_admin(
+def get_current_admin(
     current_user: Annotated[User, Depends(get_current_user)]
 ) -> User:
     """获取当前管理员用户"""
@@ -177,4 +177,5 @@ def init_admin_user(db: Session) -> None:
         )
         db.add(admin)
         db.commit()
-        print("管理员用户已创建: admin / 123456")
+        # 不打印默认密码到控制台，避免日志泄露
+        # 默认密码已在 README 中说明

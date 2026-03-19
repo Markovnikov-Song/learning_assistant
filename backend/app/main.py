@@ -1,11 +1,12 @@
 from __future__ import annotations
 
+import re
 import shutil
 import tempfile
 from datetime import datetime
 from pathlib import Path
 
-from fastapi import Depends, FastAPI, File, HTTPException, UploadFile
+from fastapi import Depends, FastAPI, File, HTTPException, UploadFile, status
 from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy.orm import Session
 
@@ -49,6 +50,46 @@ def _subject_or_404(subject_id: str, db: Session) -> models.Subject:
     if not s:
         raise HTTPException(status_code=404, detail="学科不存在")
     return s
+
+
+def _sanitize_filename(filename: str) -> str:
+    """
+    清理文件名，防止路径遍历攻击
+    只允许字母、数字、中文、下划线、短横线、点号
+    """
+    # 移除路径分隔符和危险字符
+    sanitized = re.sub(r'[\\/:*?"<>|\x00-\x1f]', '_', filename)
+
+    # 限制文件名长度
+    if len(sanitized) > 255:
+        name, ext = sanitized.rsplit('.', 1) if '.' in sanitized else (sanitized, '')
+        sanitized = name[:250] + ('.' + ext if ext else '')
+
+    # 确保文件名不为空
+    if not sanitized:
+        sanitized = "unnamed_file"
+
+    return sanitized
+
+
+def _validate_filename(filename: str) -> bool:
+    """
+    验证文件名是否安全
+    """
+    if not filename:
+        return False
+
+    # 检查路径遍历
+    if '..' in filename or filename.startswith(('/', '\\')):
+        return False
+
+    # 检查文件扩展名白名单
+    allowed_extensions = {'.pdf', '.doc', '.docx', '.ppt', '.pptx', '.xls', '.xlsx', '.txt', '.md', '.jpg', '.jpeg', '.png', '.gif'}
+    ext = Path(filename).suffix.lower()
+    if ext and ext not in allowed_extensions:
+        return False
+
+    return True
 
 
 @app.get("/health")
@@ -186,9 +227,16 @@ async def upload_document(
     if not file.filename:
         raise HTTPException(status_code=400, detail="缺少文件名")
 
+    # 验证文件名
+    if not _validate_filename(file.filename):
+        raise HTTPException(status_code=400, detail="文件名包含非法字符或文件类型不支持")
+
+    # 清理文件名
+    safe_filename = _sanitize_filename(file.filename)
+
     # stream to temp file to avoid memory blow
     with tempfile.TemporaryDirectory() as td:
-        tmp = Path(td) / file.filename
+        tmp = Path(td) / safe_filename
         with tmp.open("wb") as f:
             while True:
                 chunk = await file.read(1024 * 1024)
@@ -196,7 +244,7 @@ async def upload_document(
                     break
                 f.write(chunk)
         mime = file.content_type or "application/octet-stream"
-        doc = save_upload(subject_id, tmp, file.filename, mime, db)
+        doc = save_upload(subject_id, tmp, safe_filename, mime, db)
         return doc
 
 
