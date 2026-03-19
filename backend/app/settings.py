@@ -1,10 +1,30 @@
 from __future__ import annotations
 
+import os
 import secrets
 from pathlib import Path
 from typing import Literal
 
 from pydantic_settings import BaseSettings, SettingsConfigDict
+
+
+def _get_env_value(key: str, default: str | None = None) -> str | None:
+    """获取环境变量，支持 Streamlit Secrets"""
+    # 尝试从 os.environ 获取
+    value = os.environ.get(key)
+    if value is not None:
+        return value
+    
+    # 尝试从 Streamlit Secrets 获取（如果可用）
+    try:
+        import streamlit as st
+        if hasattr(st, 'secrets'):
+            # 直接访问 secrets[key]
+            return st.secrets.get(key, default)
+    except ImportError:
+        pass
+    
+    return default
 
 
 class Settings(BaseSettings):
@@ -39,3 +59,23 @@ class Settings(BaseSettings):
 
 settings = Settings()
 
+# 尝试从 Streamlit Secrets 覆盖 LLM 配置
+_llm_api_key = _get_env_value("LLM_API_KEY")
+if _llm_api_key:
+    settings.llm_api_key = _llm_api_key
+
+_llm_base_url = _get_env_value("LLM_BASE_URL")
+if _llm_base_url:
+    settings.llm_base_url = _llm_base_url
+
+_llm_chat_model = _get_env_value("LLM_CHAT_MODEL")
+if _llm_chat_model:
+    settings.llm_chat_model = _llm_chat_model
+
+_llm_embedding_model = _get_env_value("LLM_EMBEDDING_MODEL")
+if _llm_embedding_model:
+    settings.llm_embedding_model = _llm_embedding_model
+
+_jwt_secret = _get_env_value("JWT_SECRET")
+if _jwt_secret:
+    settings.jwt_secret = _jwt_secret
