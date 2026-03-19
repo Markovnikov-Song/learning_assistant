@@ -51,7 +51,8 @@ init_db()
 
 
 # 导入认证相关模块
-from backend.app.services.auth import authenticate_user, get_password_hash
+from backend.app.services.auth import authenticate_user, get_password_hash, create_user
+from fastapi import HTTPException
 
 
 st.set_page_config(page_title="学习助手", layout="wide")
