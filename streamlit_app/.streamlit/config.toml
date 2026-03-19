@@ -1,0 +1,30 @@
+[server]
+# 启用文件监视（在 Cloud 上可能会被忽略）
+fileWatcherType = "poll"
+
+# 设置最大上传大小（100MB）
+maxUploadSize = 100
+
+# 启用头部
+enableCORS = false
+enableXsrfProtection = true
+
+# 设置端口（Cloud 上会自动设置）
+port = 8501
+
+[browser]
+# 不自动打开浏览器
+gatherUsageStats = false
+
+[theme]
+# 暗色主题
+base = "dark"
+primaryColor = "#2a5cff"
+backgroundColor = "#0b1020"
+secondaryBackgroundColor = "#1a1f35"
+textColor = "#e8ecff"
+font = "sans serif"
+
+[logger]
+# 日志级别
+level = "info"

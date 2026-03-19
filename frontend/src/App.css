@@ -209,3 +209,150 @@ button.danger {
 .mono {
   font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, 'Liberation Mono', 'Courier New', monospace;
 }
+
+/* 登录页面样式 */
+.login-page {
+  min-height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: linear-gradient(135deg, #0b1020 0%, #1a1f35 100%);
+}
+
+.login-card {
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 20px;
+  padding: 40px;
+  width: 100%;
+  max-width: 400px;
+  backdrop-filter: blur(10px);
+}
+
+.login-card h1 {
+  font-size: 24px;
+  margin: 0 0 8px;
+  text-align: center;
+}
+
+.login-subtitle {
+  text-align: center;
+  opacity: 0.7;
+  margin-bottom: 30px;
+  font-size: 14px;
+}
+
+.login-form {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+.form-group {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.form-group label {
+  font-size: 13px;
+  opacity: 0.85;
+  font-weight: 500;
+}
+
+.form-group input {
+  width: 100%;
+  background: rgba(255, 255, 255, 0.06);
+  color: #e8ecff;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 10px;
+  padding: 12px 14px;
+  outline: none;
+  transition: border-color 0.2s;
+}
+
+.form-group input:focus {
+  border-color: #2a5cff;
+}
+
+.login-form button {
+  background: #2a5cff;
+  color: white;
+  border: 0;
+  border-radius: 10px;
+  padding: 12px;
+  cursor: pointer;
+  font-weight: 600;
+  font-size: 14px;
+  transition: opacity 0.2s;
+}
+
+.login-form button:hover:not(:disabled) {
+  opacity: 0.9;
+}
+
+.login-form button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.error-message {
+  background: rgba(255, 90, 90, 0.12);
+  border: 1px solid rgba(255, 90, 90, 0.3);
+  border-radius: 8px;
+  padding: 10px 12px;
+  font-size: 13px;
+  color: rgba(255, 150, 150, 0.95);
+}
+
+.login-info {
+  margin-top: 24px;
+  padding-top: 20px;
+  border-top: 1px solid rgba(255, 255, 255, 0.08);
+  text-align: center;
+}
+
+.login-info p {
+  font-size: 12px;
+  opacity: 0.6;
+  margin: 0;
+}
+
+/* 用户信息和登出按钮样式 */
+.user-info {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-right: 16px;
+}
+
+.user-name {
+  font-size: 13px;
+  opacity: 0.9;
+  font-weight: 500;
+}
+
+.admin-badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 2px 8px;
+  border-radius: 999px;
+  font-size: 11px;
+  background: rgba(42, 92, 255, 0.2);
+  border: 1px solid rgba(42, 92, 255, 0.4);
+  color: #8baaff;
+  margin-left: 6px;
+}
+
+.logout-btn {
+  background: rgba(255, 90, 90, 0.16);
+  border: 1px solid rgba(255, 90, 90, 0.3);
+  padding: 6px 12px;
+  font-size: 12px;
+  border-radius: 8px;
+  transition: opacity 0.2s;
+}
+
+.logout-btn:hover {
+  opacity: 0.8;
+}

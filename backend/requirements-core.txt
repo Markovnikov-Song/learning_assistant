@@ -26,5 +26,9 @@ pillow>=10.4.0
 cryptography>=42.0.8
 httpx>=0.27.0
 
+# 认证相关
+passlib[bcrypt]>=1.7.4
+python-jose[cryptography]>=3.3.0
+
 pytest>=8.2.2
 

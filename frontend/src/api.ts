@@ -41,14 +41,50 @@ export type SolveResponse = {
   citations: Citation[]
 }
 
+export type User = {
+  id: string
+  username: string
+  is_admin: boolean
+  created_at: string
+}
+
+export type TokenResponse = {
+  access_token: string
+  token_type: string
+  user: User
+}
+
 const API_BASE = import.meta.env.VITE_API_BASE || 'http://localhost:8000'
 
+// 获取存储的 token
+function getToken(): string | null {
+  return localStorage.getItem('access_token')
+}
+
+// 保存 token
+function setToken(token: string): void {
+  localStorage.setItem('access_token', token)
+}
+
+// 清除 token
+function clearToken(): void {
+  localStorage.removeItem('access_token')
+}
+
 async function http<T>(path: string, init?: RequestInit): Promise<T> {
+  const token = getToken()
+  const headers: HeadersInit = {
+    ...(init?.headers || {}),
+  }
+
+  // 如果有 token，添加到请求头
+  if (token) {
+    headers['Authorization'] = `Bearer ${token}`
+  }
+
   const res = await fetch(`${API_BASE}${path}`, {
     ...init,
-    headers: {
-      ...(init?.headers || {}),
-    },
+    headers,
   })
   if (!res.ok) {
     const txt = await res.text().catch(() => '')
@@ -58,6 +94,25 @@ async function http<T>(path: string, init?: RequestInit): Promise<T> {
 }
 
 export const api = {
+  // 认证相关
+  login: (username: string, password: string) =>
+    http<TokenResponse>('/auth/login', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ username, password }),
+    }),
+  register: (username: string, password: string, token: string) =>
+    http<TokenResponse>('/auth/register', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${token}`,
+      },
+      body: JSON.stringify({ username, password }),
+    }),
+  getMe: () => http<User>('/auth/me'),
+
+  // 学科相关
   listSubjects: () => http<Subject[]>('/subjects'),
   createSubject: (payload: { name: string; description: string; category: string }) =>
     http<Subject>('/subjects', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) }),
@@ -65,19 +120,38 @@ export const api = {
     http<Subject>(`/subjects/${id}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) }),
   deleteSubject: (id: string) => http<{ deleted: boolean }>(`/subjects/${id}`, { method: 'DELETE' }),
 
+  // 文档相关
   listDocs: (subjectId: string) => http<DocumentItem[]>(`/subjects/${subjectId}/documents`),
   uploadDoc: async (subjectId: string, file: File) => {
     const fd = new FormData()
     fd.append('file', file)
-    const res = await fetch(`${API_BASE}/subjects/${subjectId}/documents/upload`, { method: 'POST', body: fd })
+    const token = getToken()
+    const headers: HeadersInit = {}
+    if (token) {
+      headers['Authorization'] = `Bearer ${token}`
+    }
+    const res = await fetch(`${API_BASE}/subjects/${subjectId}/documents/upload`, {
+      method: 'POST',
+      headers,
+      body: fd,
+    })
     if (!res.ok) throw new Error((await res.text().catch(() => '')) || `HTTP ${res.status}`)
     return (await res.json()) as DocumentItem
   },
   deleteDoc: (subjectId: string, docId: string) => http<{ deleted: boolean }>(`/subjects/${subjectId}/documents/${docId}`, { method: 'DELETE' }),
 
+  // 问答和解题
   ask: (subjectId: string, question: string) =>
     http<AskResponse>(`/subjects/${subjectId}/ask`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ question }) }),
   solve: (subjectId: string, problem_text: string) =>
     http<SolveResponse>(`/subjects/${subjectId}/solve`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ problem_text }) }),
+}
+
+// 导出 token 管理函数
+export const auth = {
+  getToken,
+  setToken,
+  clearToken,
+  isAuthenticated: () => !!getToken(),
 }
 

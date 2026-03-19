@@ -6,6 +6,29 @@ from typing import Literal
 from pydantic import BaseModel, Field
 
 
+class UserRegister(BaseModel):
+    username: str = Field(min_length=3, max_length=100)
+    password: str = Field(min_length=6, max_length=100)
+
+
+class UserLogin(BaseModel):
+    username: str
+    password: str
+
+
+class UserOut(BaseModel):
+    id: str
+    username: str
+    is_admin: bool
+    created_at: datetime
+
+
+class TokenResponse(BaseModel):
+    access_token: str
+    token_type: str = "bearer"
+    user: UserOut
+
+
 class SubjectCreate(BaseModel):
     name: str = Field(min_length=1, max_length=200)
     description: str = ""

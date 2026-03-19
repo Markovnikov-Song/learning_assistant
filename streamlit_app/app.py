@@ -26,11 +26,18 @@ from pathlib import Path
 import streamlit as st
 
 # 4. 导入 backend 模块（此时 sys.path 已正确，且无循环）
-from backend.app.db import SessionLocal, init_db
-from backend.app.settings import settings
-from backend.app import models
-from backend.app.services.ingest import save_upload
-from backend.app.services.rag import answer_question, solve_problem
+# 使用绝对导入
+try:
+    from backend.app.db import SessionLocal, init_db
+    from backend.app.settings import settings
+    from backend.app import models
+    from backend.app.services.ingest import save_upload
+    from backend.app.services.rag import answer_question, solve_problem
+    from backend.app.services.auth import authenticate_user, get_password_hash
+except ImportError as e:
+    st.error(f"导入模块失败: {e}")
+    st.error("请确保在项目根目录运行，或者 backend 目录在 Python 路径中")
+    st.stop()
 
 
 def _ensure_data_dir() -> None:
@@ -43,9 +50,62 @@ _ensure_data_dir()
 init_db()
 
 
+# 导入认证相关模块
+from backend.app.services.auth import authenticate_user, get_password_hash
+
+
 st.set_page_config(page_title="学习助手", layout="wide")
+
+
+# 初始化会话状态
+if "logged_in" not in st.session_state:
+    st.session_state.logged_in = False
+if "user_id" not in st.session_state:
+    st.session_state.user_id = None
+if "username" not in st.session_state:
+    st.session_state.username = None
+if "is_admin" not in st.session_state:
+    st.session_state.is_admin = False
+
+
+# 登录界面
+if not st.session_state.logged_in:
+    st.title("学科专属学习助手")
+    st.caption("基于上传资料的智能问答与解题系统")
+
+    with st.form("login_form"):
+        st.subheader("登录")
+        username = st.text_input("用户名", placeholder="请输入用户名")
+        password = st.text_input("密码", type="password", placeholder="请输入密码")
+        submit = st.form_submit_button("登录")
+
+        if submit:
+            with SessionLocal() as db:
+                user = authenticate_user(db, username, password)
+                if user:
+                    st.session_state.logged_in = True
+                    st.session_state.user_id = user.id
+                    st.session_state.username = user.username
+                    st.session_state.is_admin = user.is_admin
+                    st.success(f"登录成功！欢迎，{user.username}")
+                    st.rerun()
+                else:
+                    st.error("用户名或密码错误")
+
+    st.info("默认管理员账号：admin / 123456")
+    st.stop()
+
+
+# 主应用（已登录）
 st.title("学科专属学习助手")
-st.caption("基于上传资料的智能问答与解题系统")
+st.caption(f"欢迎，{st.session_state.username} ({'管理员' if st.session_state.is_admin else '普通用户'}) - 基于上传资料的智能问答与解题系统")
+
+if st.button("退出登录"):
+    st.session_state.logged_in = False
+    st.session_state.user_id = None
+    st.session_state.username = None
+    st.session_state.is_admin = False
+    st.rerun()
 
 
 @st.cache_data(show_spinner=False)

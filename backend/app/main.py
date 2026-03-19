@@ -21,6 +21,10 @@ from backend.app.schemas import (
     SubjectCreate,
     SubjectOut,
     SubjectUpdate,
+    TokenResponse,
+    UserLogin,
+    UserOut,
+    UserRegister,
 )
 from backend.app.services.ingest import rebuild_subject_index, save_upload
 from backend.app.services.rag import answer_question, solve_problem
@@ -51,6 +55,68 @@ def _subject_or_404(subject_id: str, db: Session) -> models.Subject:
 def health() -> dict:
     return {"ok": True, "time": datetime.utcnow().isoformat()}
 
+
+# ==================== 认证相关端点 ====================
+
+from backend.app.services.auth import (
+    authenticate_user,
+    create_access_token,
+    create_user,
+    get_current_admin,
+    get_current_user,
+)
+
+
+@app.post("/auth/register", response_model=TokenResponse)
+async def register(payload: UserRegister, db: Session = Depends(get_db), current_user: models.User = Depends(get_current_admin)) -> TokenResponse:
+    """注册新用户（仅管理员可用）"""
+    user = create_user(db, payload.username, payload.password, is_admin=False)
+    access_token = create_access_token(data={"sub": user.id})
+    return TokenResponse(
+        access_token=access_token,
+        user=UserOut(
+            id=user.id,
+            username=user.username,
+            is_admin=user.is_admin,
+            created_at=user.created_at,
+        )
+    )
+
+
+@app.post("/auth/login", response_model=TokenResponse)
+async def login(payload: UserLogin, db: Session = Depends(get_db)) -> TokenResponse:
+    """用户登录"""
+    user = authenticate_user(db, payload.username, payload.password)
+    if not user:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="用户名或密码错误",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+    access_token = create_access_token(data={"sub": user.id})
+    return TokenResponse(
+        access_token=access_token,
+        user=UserOut(
+            id=user.id,
+            username=user.username,
+            is_admin=user.is_admin,
+            created_at=user.created_at,
+        )
+    )
+
+
+@app.get("/auth/me", response_model=UserOut)
+async def get_me(current_user: models.User = Depends(get_current_user)) -> UserOut:
+    """获取当前用户信息"""
+    return UserOut(
+        id=current_user.id,
+        username=current_user.username,
+        is_admin=current_user.is_admin,
+        created_at=current_user.created_at,
+    )
+
+
+# ==================== 学科管理端点 ====================
 
 @app.post("/subjects", response_model=SubjectOut)
 def create_subject(payload: SubjectCreate, db: Session = Depends(get_db)) -> models.Subject:

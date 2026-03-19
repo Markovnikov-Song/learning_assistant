@@ -1,9 +1,18 @@
 import { useEffect, useMemo, useState } from 'react'
 import 'katex/dist/katex.min.css'
 import './App.css'
-import { api, type AskResponse, type DocumentItem, type SolveResponse, type Subject } from './api'
+import { api, auth, type AskResponse, type DocumentItem, type SolveResponse, type Subject, type User } from './api'
 
 function App() {
+  // 认证状态
+  const [user, setUser] = useState<User | null>(null)
+  const [isAuthenticated, setIsAuthenticated] = useState(false)
+  const [loginUsername, setLoginUsername] = useState('')
+  const [loginPassword, setLoginPassword] = useState('')
+  const [authBusy, setAuthBusy] = useState(false)
+  const [authErr, setAuthErr] = useState('')
+
+  // 应用状态
   const [subjects, setSubjects] = useState<Subject[]>([])
   const [activeSubjectId, setActiveSubjectId] = useState<string>('')
   const [docs, setDocs] = useState<DocumentItem[]>([])
@@ -25,6 +34,96 @@ function App() {
 
   const [busy, setBusy] = useState<string>('')
   const [err, setErr] = useState<string>('')
+
+  // 检查认证状态
+  useEffect(() => {
+    const token = auth.getToken()
+    if (token) {
+      fetchUserInfo()
+    }
+  }, [])
+
+  async function fetchUserInfo() {
+    try {
+      const u = await api.getMe()
+      setUser(u)
+      setIsAuthenticated(true)
+    } catch (e: any) {
+      auth.clearToken()
+      setIsAuthenticated(false)
+      setUser(null)
+    }
+  }
+
+  async function handleLogin(e: React.FormEvent) {
+    e.preventDefault()
+    setAuthErr('')
+    setAuthBusy(true)
+    try {
+      const resp = await api.login(loginUsername, loginPassword)
+      auth.setToken(resp.access_token)
+      setUser(resp.user)
+      setIsAuthenticated(true)
+      setLoginUsername('')
+      setLoginPassword('')
+    } catch (e: any) {
+      setAuthErr(String(e?.message || e) || '登录失败')
+    } finally {
+      setAuthBusy(false)
+    }
+  }
+
+  function handleLogout() {
+    auth.clearToken()
+    setIsAuthenticated(false)
+    setUser(null)
+    setSubjects([])
+    setActiveSubjectId('')
+    setDocs([])
+    setAskResp(null)
+    setSolveResp(null)
+  }
+
+  // 如果未认证，显示登录界面
+  if (!isAuthenticated) {
+    return (
+      <div className="login-page">
+        <div className="login-card">
+          <h1>学科专属 RAG 学习助手</h1>
+          <p className="login-subtitle">请登录以继续</p>
+          <form onSubmit={handleLogin} className="login-form">
+            <div className="form-group">
+              <label>用户名</label>
+              <input
+                type="text"
+                value={loginUsername}
+                onChange={(e) => setLoginUsername(e.target.value)}
+                placeholder="请输入用户名"
+                required
+              />
+            </div>
+            <div className="form-group">
+              <label>密码</label>
+              <input
+                type="password"
+                value={loginPassword}
+                onChange={(e) => setLoginPassword(e.target.value)}
+                placeholder="请输入密码"
+                required
+              />
+            </div>
+            {authErr && <div className="error-message">{authErr}</div>}
+            <button type="submit" disabled={authBusy}>
+              {authBusy ? '登录中...' : '登录'}
+            </button>
+          </form>
+          <div className="login-info">
+            <p>默认管理员账号：admin / 123456</p>
+          </div>
+        </div>
+      </div>
+    )
+  }
 
   async function refreshSubjects(pickFirst = false) {
     const s = await api.listSubjects()
@@ -53,6 +152,12 @@ function App() {
         <div className="brand">
           <div className="brand-title">学科专属 RAG 学习助手</div>
           <div className="brand-sub">严格资料内生成 · 学科隔离 · 理工科优先</div>
+        </div>
+        <div className="user-info">
+          <span className="user-name">{user?.username} {user?.is_admin ? <span className="admin-badge">管理员</span> : null}</span>
+          <button onClick={handleLogout} className="logout-btn">
+            退出登录
+          </button>
         </div>
         <div className="status">
           {busy ? <span className="pill busy">{busy}</span> : <span className="pill ok">就绪</span>}
