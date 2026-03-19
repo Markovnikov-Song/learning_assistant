@@ -7,8 +7,8 @@ from typing import List, Optional
 from langchain_community.vectorstores import FAISS
 from langchain_core.documents import Document as LCDocument
 
-from app.services.embeddings import get_embeddings
-from app.services.storage import subject_vector_dir
+from backend.app.services.embeddings import get_embeddings
+from backend.app.services.storage import subject_vector_dir
 
 
 logger = logging.getLogger(__name__)

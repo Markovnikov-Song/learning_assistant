@@ -5,8 +5,8 @@ from dataclasses import dataclass
 import tiktoken
 from langchain_text_splitters import RecursiveCharacterTextSplitter
 
-from app.settings import settings
-from app.services.text_extract import ExtractedPage
+from backend.app.settings import settings
+from backend.app.services.text_extract import ExtractedPage
 
 
 @dataclass

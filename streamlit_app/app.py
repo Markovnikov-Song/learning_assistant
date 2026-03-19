@@ -1,12 +1,21 @@
+# 1. 未来特性导入（必须第一行）
 from __future__ import annotations
 
+# 2. 调整 sys.path（优先导入 backend）
+import sys
 import os
+
+# 获取当前文件的上级目录（learning_assistant/），作为根路径
+ROOT_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), "../"))
+sys.path.insert(0, ROOT_DIR)  # 插入到 sys.path 最前面，优先加载 backend
+
+# 3. 其他基础导入
 import tempfile
 from pathlib import Path
 
 import streamlit as st
 
-# Reuse backend modules (ensure repo root is on sys.path in Streamlit Cloud)
+# 4. 导入 backend 模块（此时 sys.path 已正确，且无循环）
 from backend.app.db import SessionLocal, init_db
 from backend.app.settings import settings
 from backend.app import models

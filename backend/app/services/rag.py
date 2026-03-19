@@ -7,11 +7,11 @@ from langchain_core.output_parsers import StrOutputParser
 from langchain_core.runnables import RunnableSequence
 from sqlalchemy.orm import Session
 
-from app import models
-from app.schemas import Citation
-from app.services.llm import get_chat_llm
-from app.services.vectorstore import load_or_create
-from app.settings import settings
+from backend.app import models
+from backend.app.schemas import Citation
+from backend.app.services.llm import get_chat_llm
+from backend.app.services.vectorstore import load_or_create
+from backend.app.settings import settings
 
 
 SYSTEM_GUARDRAILS = """你是「学科专属RAG智能学习助手」。

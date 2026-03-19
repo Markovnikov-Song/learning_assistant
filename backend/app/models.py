@@ -6,7 +6,7 @@ import uuid
 from sqlalchemy import Boolean, DateTime, ForeignKey, Integer, String, Text, UniqueConstraint
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
-from app.db import Base
+from backend.app.db import Base
 
 
 def _uuid() -> str:

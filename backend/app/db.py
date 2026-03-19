@@ -5,7 +5,8 @@ from pathlib import Path
 from sqlalchemy import create_engine
 from sqlalchemy.orm import DeclarativeBase, sessionmaker
 
-from app.settings import settings
+# 关键修改：使用绝对导入（以 backend 为根）
+from backend.app.settings import settings
 
 
 class Base(DeclarativeBase):
@@ -22,7 +23,8 @@ SessionLocal = sessionmaker(bind=engine, autocommit=False, autoflush=False, futu
 
 
 def init_db() -> None:
-    from app import models  # noqa: F401
+    # 导入所有模型（确保 Base 能识别表结构）
+    from backend.app import models  # noqa: F401
 
     Base.metadata.create_all(bind=engine)
 

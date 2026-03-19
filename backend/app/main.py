@@ -9,10 +9,10 @@ from fastapi import Depends, FastAPI, File, HTTPException, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy.orm import Session
 
-from app import models
-from app.db import init_db
-from app.deps import get_db
-from app.schemas import (
+from backend.app import models
+from backend.app.db import init_db
+from backend.app.deps import get_db
+from backend.app.schemas import (
     AskRequest,
     AskResponse,
     DocumentOut,
@@ -22,9 +22,9 @@ from app.schemas import (
     SubjectOut,
     SubjectUpdate,
 )
-from app.services.ingest import rebuild_subject_index, save_upload
-from app.services.rag import answer_question, solve_problem
-from app.settings import settings
+from backend.app.services.ingest import rebuild_subject_index, save_upload
+from backend.app.services.rag import answer_question, solve_problem
+from backend.app.settings import settings
 
 
 init_db()

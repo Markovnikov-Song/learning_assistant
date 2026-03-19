@@ -6,7 +6,7 @@ from typing import Optional
 from langchain_openai import OpenAIEmbeddings
 from langchain_core.embeddings import Embeddings
 
-from app.settings import settings
+from backend.app.settings import settings
 
 
 @lru_cache(maxsize=1)

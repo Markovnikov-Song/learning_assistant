@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from app.settings import settings
+from backend.app.settings import settings
 
 
 def ocr_image_maybe(path: Path) -> str:

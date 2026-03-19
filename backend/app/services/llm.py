@@ -6,7 +6,7 @@ from typing import Optional
 from langchain_openai import ChatOpenAI
 from langchain_core.language_models.chat_models import BaseChatModel
 
-from app.settings import settings
+from backend.app.settings import settings
 
 
 @lru_cache(maxsize=1)

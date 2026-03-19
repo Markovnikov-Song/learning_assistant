@@ -3,8 +3,8 @@ from __future__ import annotations
 from dataclasses import dataclass
 from pathlib import Path
 
-from app.settings import settings
-from app.services.ocr_optional import ocr_image_maybe
+from backend.app.settings import settings
+from backend.app.services.ocr_optional import ocr_image_maybe
 
 
 @dataclass

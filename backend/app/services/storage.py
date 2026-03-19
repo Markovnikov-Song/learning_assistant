@@ -3,7 +3,7 @@ from __future__ import annotations
 import hashlib
 from pathlib import Path
 
-from app.settings import settings
+from backend.app.settings import settings
 
 
 def sha256_file(path: Path) -> str:

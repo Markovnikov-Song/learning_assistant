@@ -6,12 +6,12 @@ from pathlib import Path
 from langchain_core.documents import Document as LCDocument
 from sqlalchemy.orm import Session
 
-from app import models
-from app.services.chunking import split_pages
-from app.services.storage import sha256_file, subject_docs_dir
-from app.services.text_extract import extract_text_with_metadata
-from app.services.vectorstore import load_or_create, persist
-from app.settings import settings
+from backend.app import models
+from backend.app.services.chunking import split_pages
+from backend.app.services.storage import sha256_file, subject_docs_dir
+from backend.app.services.text_extract import extract_text_with_metadata
+from backend.app.services.vectorstore import load_or_create, persist
+from backend.app.settings import settings
 
 
 def save_upload(subject_id: str, upload_path: Path, original_name: str, mime_type: str, db: Session) -> models.Document:
@@ -117,7 +117,7 @@ def rebuild_subject_index(subject_id: str, db: Session) -> None:
     When documents are deleted, rebuild to avoid stale vectors.
     """
     from langchain_community.vectorstores import FAISS
-    from app.services.embeddings import get_embeddings
+    from backend.app.services.embeddings import get_embeddings
 
     chunks = db.query(models.Chunk).filter(models.Chunk.subject_id == subject_id).all()
     if not chunks:
