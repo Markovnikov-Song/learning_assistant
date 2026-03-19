@@ -305,19 +305,6 @@ button.danger {
   color: rgba(255, 150, 150, 0.95);
 }
 
-.login-info {
-  margin-top: 24px;
-  padding-top: 20px;
-  border-top: 1px solid rgba(255, 255, 255, 0.08);
-  text-align: center;
-}
-
-.login-info p {
-  font-size: 12px;
-  opacity: 0.6;
-  margin: 0;
-}
-
 /* 用户信息和登出按钮样式 */
 .user-info {
   display: flex;

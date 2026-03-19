@@ -92,7 +92,6 @@ if not st.session_state.logged_in:
                 else:
                     st.error("用户名或密码错误")
 
-    st.info("默认管理员账号：admin / 123456")
     st.stop()
 
 

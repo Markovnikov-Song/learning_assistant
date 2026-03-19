@@ -117,9 +117,6 @@ function App() {
               {authBusy ? '登录中...' : '登录'}
             </button>
           </form>
-          <div className="login-info">
-            <p>默认管理员账号：admin / 123456</p>
-          </div>
         </div>
       </div>
     )
