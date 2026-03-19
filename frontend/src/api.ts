@@ -54,6 +54,18 @@ export type TokenResponse = {
   user: User
 }
 
+export type ConversationHistory = {
+  id: string
+  user_id: string
+  subject_id: string
+  question_type: 'ask' | 'solve'
+  question: string
+  answer: string
+  citations: Citation[]
+  found: boolean
+  created_at: string
+}
+
 const API_BASE = import.meta.env.VITE_API_BASE || 'http://localhost:8000'
 
 // 获取存储的 token
@@ -145,6 +157,32 @@ export const api = {
     http<AskResponse>(`/subjects/${subjectId}/ask`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ question }) }),
   solve: (subjectId: string, problem_text: string) =>
     http<SolveResponse>(`/subjects/${subjectId}/solve`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ problem_text }) }),
+
+  // 对话历史相关
+  getHistory: (subjectId?: string) =>
+    http<ConversationHistory[]>(`/history${subjectId ? `?subject_id=${subjectId}` : ''}`),
+  deleteHistory: (historyId: string) =>
+    http<{ deleted: boolean }>(`/history/${historyId}`, { method: 'DELETE' }),
+  exportHistory: async (historyId: string) => {
+    const token = getToken()
+    const headers: HeadersInit = {}
+    if (token) {
+      headers['Authorization'] = `Bearer ${token}`
+    }
+    const res = await fetch(`${API_BASE}/history/export/${historyId}`, {
+      headers,
+    })
+    if (!res.ok) throw new Error((await res.text().catch(() => '')) || `HTTP ${res.status}`)
+    const blob = await res.blob()
+    const url = window.URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = `history_${historyId}.md`
+    document.body.appendChild(a)
+    a.click()
+    window.URL.revokeObjectURL(url)
+    document.body.removeChild(a)
+  },
 }
 
 // 导出 token 管理函数
@@ -154,4 +192,3 @@ export const auth = {
   clearToken,
   isAuthenticated: () => !!getToken(),
 }
-

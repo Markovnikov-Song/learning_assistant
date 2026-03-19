@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 import re
 import shutil
 import tempfile
@@ -8,6 +9,7 @@ from pathlib import Path
 
 from fastapi import Depends, FastAPI, File, HTTPException, UploadFile, status
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import Response
 from sqlalchemy.orm import Session
 
 from backend.app import models
@@ -16,6 +18,8 @@ from backend.app.deps import get_db
 from backend.app.schemas import (
     AskRequest,
     AskResponse,
+    Citation,
+    ConversationHistoryOut,
     DocumentOut,
     SolveRequest,
     SolveResponse,
@@ -269,16 +273,141 @@ def delete_document(subject_id: str, document_id: str, db: Session = Depends(get
     return {"deleted": True}
 
 
+# ==================== 问答和解题端点（带历史记录保存）====================
+
 @app.post("/subjects/{subject_id}/ask", response_model=AskResponse)
-def ask(subject_id: str, payload: AskRequest, db: Session = Depends(get_db)) -> AskResponse:
+def ask(subject_id: str, payload: AskRequest, current_user: models.User = Depends(get_current_user), db: Session = Depends(get_db)) -> AskResponse:
     _subject_or_404(subject_id, db)
     found, answer, citations = answer_question(subject_id, payload.question, db)
+    
+    # 保存对话历史
+    history = models.ConversationHistory(
+        user_id=current_user.id,
+        subject_id=subject_id,
+        question_type="ask",
+        question=payload.question,
+        answer=answer,
+        citations=json.dumps([c.model_dump() for c in citations]),
+        found=found,
+    )
+    db.add(history)
+    db.commit()
+    
     return AskResponse(answer=answer, citations=citations, found=found, conversation_id=payload.conversation_id)
 
 
 @app.post("/subjects/{subject_id}/solve", response_model=SolveResponse)
-def solve(subject_id: str, payload: SolveRequest, db: Session = Depends(get_db)) -> SolveResponse:
+def solve(subject_id: str, payload: SolveRequest, current_user: models.User = Depends(get_current_user), db: Session = Depends(get_db)) -> SolveResponse:
     _subject_or_404(subject_id, db)
     found, out_md, citations = solve_problem(subject_id, payload.problem_text, db)
+    
+    # 保存对话历史
+    history = models.ConversationHistory(
+        user_id=current_user.id,
+        subject_id=subject_id,
+        question_type="solve",
+        question=payload.problem_text,
+        answer=out_md,
+        citations=json.dumps([c.model_dump() for c in citations]),
+        found=found,
+    )
+    db.add(history)
+    db.commit()
+    
     return SolveResponse(found=found, output_markdown=out_md, citations=citations)
 
+
+# ==================== 对话历史管理端点 ====================
+
+@app.get("/history", response_model=list[ConversationHistoryOut])
+def get_history(
+    subject_id: str | None = None,
+    current_user: models.User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+) -> list[models.ConversationHistory]:
+    """获取当前用户的对话历史"""
+    query = db.query(models.ConversationHistory).filter(
+        models.ConversationHistory.user_id == current_user.id,
+        models.ConversationHistory.deleted == False,
+    )
+    
+    if subject_id:
+        query = query.filter(models.ConversationHistory.subject_id == subject_id)
+    
+    return query.order_by(models.ConversationHistory.created_at.desc()).all()
+
+
+@app.delete("/history/{history_id}")
+def delete_history(
+    history_id: str,
+    current_user: models.User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+) -> dict:
+    """删除指定的对话历史记录"""
+    history = db.query(models.ConversationHistory).filter(
+        models.ConversationHistory.id == history_id,
+        models.ConversationHistory.user_id == current_user.id,
+    ).one_or_none()
+    
+    if not history:
+        raise HTTPException(status_code=404, detail="对话记录不存在")
+    
+    # 软删除
+    history.deleted = True
+    db.add(history)
+    db.commit()
+    
+    return {"deleted": True}
+
+
+@app.get("/history/export/{history_id}")
+def export_history(
+    history_id: str,
+    current_user: models.User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+) -> Response:
+    """导出对话历史为 Markdown 文件"""
+    history = db.query(models.ConversationHistory).filter(
+        models.ConversationHistory.id == history_id,
+        models.ConversationHistory.user_id == current_user.id,
+        models.ConversationHistory.deleted == False,
+    ).one_or_none()
+    
+    if not history:
+        raise HTTPException(status_code=404, detail="对话记录不存在")
+    
+    # 解析引用
+    citations = json.loads(history.citations)
+    
+    # 生成 Markdown 内容
+    question_type_label = "问答" if history.question_type == "ask" else "解题"
+    
+    md_content = f"# {question_type_label}记录\n\n"
+    md_content += f"**学科 ID**: {history.subject_id}\n"
+    md_content += f"**时间**: {history.created_at.strftime('%Y-%m-%d %H:%M:%S')}\n"
+    md_content += f"**状态**: {'✅ 找到相关内容' if history.found else '❌ 未找到相关内容'}\n\n"
+    
+    md_content += "## 问题\n\n"
+    md_content += f"{history.question}\n\n"
+    
+    md_content += "## 回答\n\n"
+    md_content += f"{history.answer}\n\n"
+    
+    if citations:
+        md_content += "## 来源\n\n"
+        for c in citations:
+            md_content += f"- **{c['source_name']}**"
+            if c.get('page_or_section'):
+                md_content += f" · {c['page_or_section']}"
+            if c.get('position_hint'):
+                md_content += f" · {c['position_hint']}"
+            md_content += "\n"
+    
+    # 生成文件名
+    filename = f"{question_type_label}_{history.created_at.strftime('%Y%m%d_%H%M%S')}.md"
+    
+    return Response(
+        content=md_content,
+        media_type="text/markdown",
+        headers={"Content-Disposition": f"attachment; filename={filename}"}
+    )

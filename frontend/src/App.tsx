@@ -40,6 +40,10 @@ function App() {
   const [err, setErr] = useState<string>('')
   const [successMsg, setSuccessMsg] = useState<string>('')
 
+  // 历史记录相关
+  const [showHistory, setShowHistory] = useState(false)
+  const [history, setHistory] = useState<api.ConversationHistory[]>([])
+
   // 拍照相关
   const [questionImage, setQuestionImage] = useState<File | null>(null)
   const [questionImagePreview, setQuestionImagePreview] = useState<string | null>(null)
@@ -126,6 +130,38 @@ function App() {
       setAuthErr(String(e?.message || e) || '注册失败')
     } finally {
       setAuthBusy(false)
+    }
+  }
+
+  // 历史记录相关函数
+  async function fetchHistory() {
+    try {
+      const h = await api.getHistory(activeSubjectId || undefined)
+      setHistory(h)
+      setShowHistory(true)
+    } catch (e: any) {
+      setErr(String(e?.message || e) || '获取历史记录失败')
+    }
+  }
+
+  async function deleteHistory(historyId: string) {
+    try {
+      await api.deleteHistory(historyId)
+      setHistory(history.filter(h => h.id !== historyId))
+      setSuccessMsg('历史记录已删除')
+      setTimeout(() => setSuccessMsg(''), 3000)
+    } catch (e: any) {
+      setErr(String(e?.message || e) || '删除历史记录失败')
+    }
+  }
+
+  async function exportHistory(historyId: string) {
+    try {
+      await api.exportHistory(historyId)
+      setSuccessMsg('导出成功')
+      setTimeout(() => setSuccessMsg(''), 3000)
+    } catch (e: any) {
+      setErr(String(e?.message || e) || '导出失败')
     }
   }
 
@@ -263,6 +299,9 @@ function App() {
           </button>
         </div>
         <div className="status">
+          <button onClick={fetchHistory} disabled={!activeSubjectId} className="history-btn">
+            📜 历史记录
+          </button>
           {busy ? <span className="pill busy">{busy}</span> : <span className="pill ok">就绪</span>}
           {successMsg ? <span className="pill success">{successMsg}</span> : null}
           {err ? <span className="pill err">{err}</span> : null}
@@ -652,6 +691,53 @@ function App() {
           ) : null}
         </section>
       </main>
+
+      {/* 历史记录模态对话框 */}
+      {showHistory && (
+        <div className="modal-overlay" onClick={() => setShowHistory(false)}>
+          <div className="modal-content" onClick={(e) => e.stopPropagation()}>
+            <div className="modal-header">
+              <h3>历史记录</h3>
+              <button onClick={() => setShowHistory(false)} className="close-btn">✕</button>
+            </div>
+            <div className="modal-body">
+              {history.length === 0 ? (
+                <p className="muted">暂无历史记录</p>
+              ) : (
+                <div className="history-list">
+                  {history.map((h) => (
+                    <div key={h.id} className="history-item">
+                      <div className="history-header">
+                        <span className="history-type">
+                          {h.question_type === 'ask' ? '❓ 问答' : '✏️ 解题'}
+                        </span>
+                        <span className="history-date">
+                          {new Date(h.created_at).toLocaleString('zh-CN')}
+                        </span>
+                      </div>
+                      <div className="history-question">
+                        <strong>问题：</strong> {h.question}
+                      </div>
+                      <div className="history-answer">
+                        <strong>回答：</strong>
+                        <div className="history-answer-text">{h.answer}</div>
+                      </div>
+                      <div className="history-actions">
+                        <button onClick={() => exportHistory(h.id)} className="export-btn">
+                          📥 导出
+                        </button>
+                        <button onClick={() => deleteHistory(h.id)} className="delete-btn">
+                          🗑️ 删除
+                        </button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }

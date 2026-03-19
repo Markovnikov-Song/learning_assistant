@@ -93,3 +93,24 @@ class SolveResponse(BaseModel):
     output_markdown: str
     citations: list[Citation]
 
+
+# 对话历史相关模型
+class ConversationHistoryOut(BaseModel):
+    id: str
+    user_id: str
+    subject_id: str
+    question_type: Literal["ask", "solve"]
+    question: str
+    answer: str
+    citations: list[Citation]
+    found: bool
+    created_at: datetime
+
+
+class ConversationHistoryCreate(BaseModel):
+    subject_id: str
+    question_type: Literal["ask", "solve"]
+    question: str
+    answer: str
+    citations: list[Citation]
+    found: bool = True

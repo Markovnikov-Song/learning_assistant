@@ -80,3 +80,35 @@ class Chunk(Base):
 
     document: Mapped["Document"] = relationship(back_populates="chunks")
 
+
+class ConversationHistory(Base):
+    """对话历史记录表"""
+    __tablename__ = "conversation_history"
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=_uuid)
+    user_id: Mapped[str] = mapped_column(String(36), ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
+    subject_id: Mapped[str] = mapped_column(String(36), ForeignKey("subjects.id", ondelete="CASCADE"), nullable=False)
+
+    # 问题类型：ask（问答）或 solve（解题）
+    question_type: Mapped[str] = mapped_column(String(20), nullable=False)  # ask | solve
+    
+    # 问题内容
+    question: Mapped[str] = mapped_column(Text, nullable=False)
+    
+    # 回答内容
+    answer: Mapped[str] = mapped_column(Text, nullable=False)
+    
+    # 引用来源（JSON 格式存储）
+    citations: Mapped[str] = mapped_column(Text, nullable=False, default="[]")  # JSON string
+    
+    # 是否找到相关内容
+    found: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
+    
+    # 软删除标记
+    deleted: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    
+    created_at: Mapped[dt.datetime] = mapped_column(DateTime, nullable=False, default=dt.datetime.utcnow)
+
+    # 关系
+    user: Mapped["User"] = relationship(foreign_keys=[user_id])
+    subject: Mapped["Subject"] = relationship(foreign_keys=[subject_id])

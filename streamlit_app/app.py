@@ -185,6 +185,43 @@ def refresh_subjects() -> None:
     st.cache_data.clear()
 
 
+@st.cache_data(show_spinner=False)
+def list_history(subject_id: str | None = None, user_id: str | None = None) -> list[dict]:
+    with SessionLocal() as db:
+        query = db.query(models.ConversationHistory).filter(
+            models.ConversationHistory.deleted == False
+        )
+        if user_id:
+            query = query.filter(models.ConversationHistory.user_id == user_id)
+        if subject_id:
+            query = query.filter(models.ConversationHistory.subject_id == subject_id)
+        return [
+            {
+                "id": h.id,
+                "question_type": h.question_type,
+                "question": h.question,
+                "answer": h.answer,
+                "citations": h.citations,
+                "found": h.found,
+                "created_at": h.created_at,
+            }
+            for h in query.order_by(models.ConversationHistory.created_at.desc()).all()
+        ]
+
+
+def delete_history(history_id: str, user_id: str) -> bool:
+    with SessionLocal() as db:
+        h = db.query(models.ConversationHistory).filter(
+            models.ConversationHistory.id == history_id,
+            models.ConversationHistory.user_id == user_id,
+        ).first()
+        if h:
+            h.deleted = True
+            db.commit()
+            return True
+        return False
+
+
 with st.sidebar:
     st.subheader("学科")
     if st.button("刷新学科"):
@@ -223,6 +260,52 @@ with st.sidebar:
         refresh_subjects()
         st.toast(f"学科「{new_name.strip()}」创建成功！", icon="✅")
         st.rerun()
+
+    st.divider()
+    st.markdown("**📜 历史记录**")
+    if st.button("查看历史记录", use_container_width=True, disabled=not subject_id):
+        history = list_history(subject_id, st.session_state.user_id)
+        if history:
+            for h in history:
+                with st.expander(f"{'❓ 问答' if h['question_type'] == 'ask' else '✏️ 解题'} - {h['created_at'].strftime('%Y-%m-%d %H:%M')}"):
+                    st.write(f"**问题**: {h['question']}")
+                    st.write(f"**回答**:")
+                    st.markdown(h['answer'])
+                    col1, col2 = st.columns([1, 1])
+                    with col1:
+                        if st.button(f"📥 导出", key=f"export_{h['id']}", use_container_width=True):
+                            # 导出为 Markdown 文件
+                            import json
+                            citations = json.loads(h['citations'])
+                            md_content = f"# {'问答' if h['question_type'] == 'ask' else '解题'}记录\n\n"
+                            md_content += f"**时间**: {h['created_at'].strftime('%Y-%m-%d %H:%M:%S')}\n\n"
+                            md_content += "## 问题\n\n"
+                            md_content += f"{h['question']}\n\n"
+                            md_content += "## 回答\n\n"
+                            md_content += f"{h['answer']}\n\n"
+                            if citations:
+                                md_content += "## 来源\n\n"
+                                for c in citations:
+                                    md_content += f"- **{c['source_name']}**"
+                                    if c.get('page_or_section'):
+                                        md_content += f" · {c['page_or_section']}"
+                                    if c.get('position_hint'):
+                                        md_content += f" · {c['position_hint']}"
+                                    md_content += "\n"
+                            
+                            st.download(
+                                md_content,
+                                f"history_{h['id']}.md",
+                                mime="text/markdown",
+                                key=f"download_{h['id']}"
+                            )
+                    with col2:
+                        if st.button(f"🗑️ 删除", key=f"delete_{h['id']}", type="secondary", use_container_width=True):
+                            if delete_history(h['id'], st.session_state.user_id):
+                                st.toast("已删除", icon="🗑️")
+                                st.rerun()
+        else:
+            st.info("暂无历史记录")
 
 
 subject_id = None if subj_label == "（新建/选择）" else subj_options[subj_label]
