@@ -39,10 +39,9 @@ def split_pages(pages: list[ExtractedPage]) -> list[ChunkWithMeta]:
     分割页面文本为多个块
     确保每个块都不超过 512 tokens
     """
-    # 使用保守的 chunk_size，确保分割后的块不会太大
-    # 考虑到中文可能占用更多 tokens，使用 350 作为 chunk_size
-    safe_chunk_size = 350
-    safe_overlap = 50
+    # 使用更保守的 chunk_size，进一步降低到 300，避免超过 512 限制
+    safe_chunk_size = 300
+    safe_overlap = 30  # 减少overlap，避免合并后超过限制
     
     separators = ["\n\n", "\n", "。", ".", " ", ""]
     splitter = RecursiveCharacterTextSplitter(
@@ -66,15 +65,26 @@ def split_pages(pages: list[ExtractedPage]) -> list[ChunkWithMeta]:
             
             # 验证截断后的文本
             final_token_count = _token_len(truncated_text)
+            
+            # 如果还是超过 512，继续截断到更小的值
             if final_token_count > 512:
-                # 如果还是太大（理论上不应该发生），再次截断
                 truncated_text = _truncate_to_max_tokens(truncated_text, max_tokens=480)
                 final_token_count = _token_len(truncated_text)
                 
                 if final_token_count > 512:
-                    # 极端情况：直接取前 300 个字符
-                    truncated_text = truncated_text[:300]
+                    truncated_text = _truncate_to_max_tokens(truncated_text, max_tokens=450)
                     final_token_count = _token_len(truncated_text)
+                    
+                    if final_token_count > 512:
+                        # 极端情况：按字符数截断，大约 256 个字符对应约 512 tokens（中文情况）
+                        truncated_text = truncated_text[:256]
+                        final_token_count = _token_len(truncated_text)
+            
+            # 最后验证一次，确保绝对不会超过 512
+            if final_token_count > 512:
+                # 如果还是超过，取更少字符
+                truncated_text = truncated_text[:200]
+                final_token_count = _token_len(truncated_text)
             
             chunks.append(
                 ChunkWithMeta(

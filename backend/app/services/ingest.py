@@ -156,6 +156,22 @@ def _ingest_document(doc: models.Document, db: Session, progress_callback=None) 
         # 最终检查：确保文本不超过 512 tokens
         safe_text = _truncate_to_max_tokens(ch.text, max_tokens=512)
         
+        # 再次验证，确保截断后的文本确实不超过 512
+        safe_token_count = _token_len(safe_text)
+        if safe_token_count > 512:
+            # 如果还是超过，继续截断
+            safe_text = _truncate_to_max_tokens(safe_text, max_tokens=480)
+            safe_token_count = _token_len(safe_text)
+            
+            if safe_token_count > 512:
+                safe_text = _truncate_to_max_tokens(safe_text, max_tokens=450)
+                safe_token_count = _token_len(safe_text)
+                
+                if safe_token_count > 512:
+                    # 极端情况：按字符数截断
+                    safe_text = safe_text[:200]
+                    safe_token_count = _token_len(safe_text)
+        
         # 如果文本被截断了，更新数据库
         if safe_text != ch.text:
             ch.text = safe_text
@@ -182,6 +198,7 @@ def _ingest_document(doc: models.Document, db: Session, progress_callback=None) 
             import logging
             logger = logging.getLogger(__name__)
             logger.error(f"Failed to add chunk {ch.id} to vector store: {e}")
+            logger.error(f"Chunk text length: {len(safe_text)}, Token count: {safe_token_count}")
             continue
     
     persist(doc.subject_id, store)
