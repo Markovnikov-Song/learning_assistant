@@ -224,6 +224,10 @@ def delete_history(history_id: str, user_id: str) -> bool:
         return False
 
 
+# 初始化 session_state
+if "subject_id" not in st.session_state:
+    st.session_state.subject_id = None
+
 with st.sidebar:
     st.subheader("学科")
     if st.button("刷新学科"):
@@ -232,8 +236,9 @@ with st.sidebar:
     subj_options = {f"{s['name']}（{s['category']}）": s["id"] for s in subjects}
     subj_label = st.selectbox("选择学科", options=["（新建/选择）"] + list(subj_options.keys()))
 
-    # 定义 subject_id（在侧边栏中定义，以便后面使用）
-    subject_id = None if subj_label == "（新建/选择）" else subj_options[subj_label]
+    # 更新 session_state 中的 subject_id
+    st.session_state.subject_id = None if subj_label == "（新建/选择）" else subj_options[subj_label]
+    subject_id = st.session_state.subject_id
 
     # 删除学科按钮
     if subj_label != "（新建/选择）":
