@@ -460,51 +460,31 @@ with col1:
             doc_source_name = None
             doc_error = None
             
-            # 创建进度条和状态容器
-            progress_bar = st.progress(0, "准备上传...")
-            status_text = st.empty()
-            
-            def update_progress(current: int, total: int, message: str):
-                """进度更新回调函数"""
-                progress = current / total
-                progress_bar.progress(progress, f"{message} ({current}/{total})")
-                status_text.text(message)
-            
+            # 暂时使用简单的spinner，不使用进度回调
             try:
-                with tempfile.TemporaryDirectory() as td:
-                    tmp_path = Path(td) / up.name
-                    tmp_path.write_bytes(up.getbuffer())
-                    
-                    with SessionLocal() as db:
-                        doc = save_upload(
-                            subject_id=subject_id,
-                            upload_path=tmp_path,
-                            original_name=up.name,
-                            mime_type=up.type or "application/octet-stream",
-                            db=db,
-                            progress_callback=update_progress,
-                        )
-                        # 在会话关闭前获取需要的属性
-                        doc_status = doc.status
-                        doc_source_name = doc.source_name
-                        doc_error = doc.error
-                
-                # 更新进度到100%
-                progress_bar.progress(1.0, "处理完成！")
-                status_text.text("处理完成！")
-                
-                # 清空进度条和状态文本
-                time.sleep(1)
-                progress_bar.empty()
-                status_text.empty()
+                with st.spinner("上传并解析入库中…"):
+                    with tempfile.TemporaryDirectory() as td:
+                        tmp_path = Path(td) / up.name
+                        tmp_path.write_bytes(up.getbuffer())
+                        
+                        with SessionLocal() as db:
+                            doc = save_upload(
+                                subject_id=subject_id,
+                                upload_path=tmp_path,
+                                original_name=up.name,
+                                mime_type=up.type or "application/octet-stream",
+                                db=db,
+                            )
+                            # 在会话关闭前获取需要的属性
+                            doc_status = doc.status
+                            doc_source_name = doc.source_name
+                            doc_error = doc.error
                 
                 if doc_status == "ready":
                     st.success(f"✅ 入库完成：{doc_source_name}")
                 else:
                     st.error(f"❌ 入库失败：{doc_error or '未知错误'}")
             except Exception as e:
-                progress_bar.empty()
-                status_text.empty()
                 st.error(f"❌ 处理出错：{str(e)}")
 
         st.divider()
