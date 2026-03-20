@@ -39,9 +39,9 @@ def split_pages(pages: list[ExtractedPage]) -> list[ChunkWithMeta]:
     分割页面文本为多个块
     确保每个块都不超过 512 tokens
     """
-    # 使用更保守的 chunk_size，进一步降低到 300，避免超过 512 限制
-    safe_chunk_size = 300
-    safe_overlap = 30  # 减少overlap，避免合并后超过限制
+    # 使用非常保守的 chunk_size，进一步降低到 250，避免超过 512 限制
+    safe_chunk_size = 250
+    safe_overlap = 20  # 减少overlap，避免合并后超过限制
     
     separators = ["\n\n", "\n", "。", ".", " ", ""]
     splitter = RecursiveCharacterTextSplitter(
@@ -60,30 +60,30 @@ def split_pages(pages: list[ExtractedPage]) -> list[ChunkWithMeta]:
         split_texts = splitter.split_text(p.text)
         
         for idx, c in enumerate(split_texts):
-            # 强制截断到 512 tokens 以内
-            truncated_text = _truncate_to_max_tokens(c, max_tokens=512)
+            # 强制截断到 480 tokens（留出安全边际）
+            truncated_text = _truncate_to_max_tokens(c, max_tokens=480)
             
             # 验证截断后的文本
             final_token_count = _token_len(truncated_text)
             
-            # 如果还是超过 512，继续截断到更小的值
-            if final_token_count > 512:
-                truncated_text = _truncate_to_max_tokens(truncated_text, max_tokens=480)
+            # 如果还是超过 480，继续截断到更小的值
+            if final_token_count > 480:
+                truncated_text = _truncate_to_max_tokens(truncated_text, max_tokens=450)
                 final_token_count = _token_len(truncated_text)
                 
-                if final_token_count > 512:
-                    truncated_text = _truncate_to_max_tokens(truncated_text, max_tokens=450)
+                if final_token_count > 450:
+                    truncated_text = _truncate_to_max_tokens(truncated_text, max_tokens=400)
                     final_token_count = _token_len(truncated_text)
                     
-                    if final_token_count > 512:
-                        # 极端情况：按字符数截断，大约 256 个字符对应约 512 tokens（中文情况）
-                        truncated_text = truncated_text[:256]
+                    if final_token_count > 400:
+                        # 极端情况：按字符数截断，大约 200 个字符对应约 400 tokens（中文情况）
+                        truncated_text = truncated_text[:200]
                         final_token_count = _token_len(truncated_text)
             
             # 最后验证一次，确保绝对不会超过 512
             if final_token_count > 512:
                 # 如果还是超过，取更少字符
-                truncated_text = truncated_text[:200]
+                truncated_text = truncated_text[:150]
                 final_token_count = _token_len(truncated_text)
             
             chunks.append(

@@ -19,9 +19,17 @@ def _get_env_value(key: str, default: str | None = None) -> str | None:
     try:
         import streamlit as st
         if hasattr(st, 'secrets'):
-            # 直接访问 secrets[key]
-            return st.secrets.get(key, default)
-    except ImportError:
+            # 使用安全的方式访问 secrets，避免抛出异常
+            if hasattr(st.secrets, '_is_loaded') and st.secrets._is_loaded():
+                try:
+                    return st.secrets[key]
+                except KeyError:
+                    return default
+            else:
+                # Secrets还未加载，返回默认值
+                return default
+    except (ImportError, Exception):
+        # 如果导入失败或访问失败，返回默认值
         pass
     
     return default
