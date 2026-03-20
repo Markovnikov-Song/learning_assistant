@@ -89,7 +89,7 @@ class ConversationSession(Base):
     user_id: Mapped[str] = mapped_column(String(36), ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
     subject_id: Mapped[str] = mapped_column(String(36), ForeignKey("subjects.id", ondelete="CASCADE"), nullable=False)
 
-    title: Mapped[str] = Mapped[str(200], nullable=False, default="新对话")
+    title: Mapped[str] = mapped_column(String(200), nullable=False, default="新对话")
     
     # 软删除标记
     deleted: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
