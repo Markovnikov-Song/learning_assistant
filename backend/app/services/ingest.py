@@ -33,13 +33,28 @@ def _truncate_to_max_tokens(text: str, max_tokens: int = 512) -> str:
     return enc.decode(tokens)
 
 
-def save_upload(subject_id: str, upload_path: Path, original_name: str, mime_type: str, db: Session) -> models.Document:
+def save_upload(
+    subject_id: str,
+    upload_path: Path,
+    original_name: str,
+    mime_type: str,
+    db: Session,
+    progress_callback=None,
+) -> models.Document:
+    """保存上传的文档并处理
+    
+    Args:
+        progress_callback: 可选的进度回调函数，签名为 callback(current, total, message)
+    """
     docs_dir = subject_docs_dir(subject_id)
     target = docs_dir / original_name
     target.parent.mkdir(parents=True, exist_ok=True)
     shutil.copy2(upload_path, target)
     h = sha256_file(target)
     size = target.stat().st_size
+
+    if progress_callback:
+        progress_callback(1, 4, f"检查文档: {original_name}")
 
     existing = (
         db.query(models.Document)
@@ -76,7 +91,9 @@ def save_upload(subject_id: str, upload_path: Path, original_name: str, mime_typ
     db.commit()
 
     try:
-        _ingest_document(doc, db)
+        if progress_callback:
+            progress_callback(2, 4, "提取文本内容...")
+        _ingest_document(doc, db, progress_callback)
         doc.status = "ready"
         doc.error = ""
     except Exception as e:  # noqa: BLE001
@@ -88,14 +105,26 @@ def save_upload(subject_id: str, upload_path: Path, original_name: str, mime_typ
     return doc
 
 
-def _ingest_document(doc: models.Document, db: Session) -> None:
+def _ingest_document(doc: models.Document, db: Session, progress_callback=None) -> None:
+    """处理文档并添加到向量存储
+    
+    Args:
+        progress_callback: 可选的进度回调函数，签名为 callback(current, total, message)
+    """
     path = Path(doc.storage_path)
+    
+    if progress_callback:
+        progress_callback(3, 4, "提取文本并分割...")
+    
     pages = extract_text_with_metadata(path)
     chunks = split_pages(pages)
     if not chunks:
         raise ValueError("未提取到可用文本（可能是扫描版/加密/损坏文件）。")
 
     # Persist chunks to DB first (强制元数据标注)
+    if progress_callback:
+        progress_callback(3, 4, f"保存 {len(chunks)} 个文本块...")
+    
     for i, c in enumerate(chunks):
         db.add(
             models.Chunk(
@@ -112,8 +141,18 @@ def _ingest_document(doc: models.Document, db: Session) -> None:
     # Then upsert into subject vectorstore
     store = load_or_create(doc.subject_id)
     
+    if progress_callback:
+        progress_callback(4, 4, f"生成向量索引（共 {len(chunks)} 个块）...")
+    
     # 逐个添加文档，避免批量处理时的 token 超限问题
-    for ch in db.query(models.Chunk).filter(models.Chunk.document_id == doc.id).order_by(models.Chunk.chunk_index).all():
+    chunks_query = db.query(models.Chunk).filter(models.Chunk.document_id == doc.id).order_by(models.Chunk.chunk_index).all()
+    total_chunks = len(chunks_query)
+    
+    for idx, ch in enumerate(chunks_query):
+        # 更新进度
+        if progress_callback and idx % 10 == 0:  # 每10个chunk更新一次进度
+            progress_callback(4, 4, f"生成向量索引... {idx}/{total_chunks}")
+        
         # 最终检查：确保文本不超过 512 tokens
         safe_text = _truncate_to_max_tokens(ch.text, max_tokens=512)
         

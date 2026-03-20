@@ -81,6 +81,28 @@ class Chunk(Base):
     document: Mapped["Document"] = relationship(back_populates="chunks")
 
 
+class ConversationSession(Base):
+    """对话会话表"""
+    __tablename__ = "conversation_sessions"
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=_uuid)
+    user_id: Mapped[str] = mapped_column(String(36), ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
+    subject_id: Mapped[str] = mapped_column(String(36), ForeignKey("subjects.id", ondelete="CASCADE"), nullable=False)
+
+    title: Mapped[str] = Mapped[str(200], nullable=False, default="新对话")
+    
+    # 软删除标记
+    deleted: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    
+    created_at: Mapped[dt.datetime] = mapped_column(DateTime, nullable=False, default=dt.datetime.utcnow)
+    updated_at: Mapped[dt.datetime] = mapped_column(DateTime, nullable=False, default=dt.datetime.utcnow)
+
+    # 关系
+    user: Mapped["User"] = relationship(foreign_keys=[user_id])
+    subject: Mapped["Subject"] = relationship(foreign_keys=[subject_id])
+    histories: Mapped[list["ConversationHistory"]] = relationship(back_populates="session", cascade="all, delete-orphan")
+
+
 class ConversationHistory(Base):
     """对话历史记录表"""
     __tablename__ = "conversation_history"
@@ -88,6 +110,7 @@ class ConversationHistory(Base):
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=_uuid)
     user_id: Mapped[str] = mapped_column(String(36), ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
     subject_id: Mapped[str] = mapped_column(String(36), ForeignKey("subjects.id", ondelete="CASCADE"), nullable=False)
+    session_id: Mapped[str] = mapped_column(String(36), ForeignKey("conversation_sessions.id", ondelete="CASCADE"), nullable=True)
 
     # 问题类型：ask（问答）或 solve（解题）
     question_type: Mapped[str] = mapped_column(String(20), nullable=False)  # ask | solve
@@ -112,3 +135,4 @@ class ConversationHistory(Base):
     # 关系
     user: Mapped["User"] = relationship(foreign_keys=[user_id])
     subject: Mapped["Subject"] = relationship(foreign_keys=[subject_id])
+    session: Mapped["ConversationSession"] = relationship(foreign_keys=[session_id])

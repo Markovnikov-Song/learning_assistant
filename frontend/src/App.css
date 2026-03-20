@@ -702,6 +702,148 @@ button.danger {
   opacity: 0.8;
 }
 
+/* 会话管理样式 */
+.active-session-info {
+  background: rgba(42, 92, 255, 0.1);
+  border: 1px solid rgba(42, 92, 255, 0.2);
+  border-radius: 8px;
+  padding: 8px 12px;
+  margin-bottom: 12px;
+  font-size: 13px;
+  color: #8baaff;
+}
+
+.new-session-section {
+  display: flex;
+  gap: 10px;
+  margin-bottom: 20px;
+  padding-bottom: 20px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.new-session-section input {
+  flex: 1;
+  background: rgba(255, 255, 255, 0.06);
+  color: #e8ecff;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 8px;
+  padding: 8px 12px;
+  outline: none;
+}
+
+.new-session-section button {
+  background: #2a5cff;
+  color: white;
+  border: 0;
+  border-radius: 8px;
+  padding: 8px 16px;
+  cursor: pointer;
+  font-weight: 500;
+  font-size: 13px;
+  white-space: nowrap;
+}
+
+.new-session-section button:hover:not(:disabled) {
+  opacity: 0.9;
+}
+
+.new-session-section button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.session-list {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.session-item {
+  background: rgba(0, 0, 0, 0.3);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 12px;
+  padding: 16px;
+  transition: border-color 0.2s;
+}
+
+.session-item.active {
+  border-color: rgba(42, 92, 255, 0.3);
+  background: rgba(42, 92, 255, 0.05);
+}
+
+.session-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 8px;
+}
+
+.session-title {
+  font-size: 14px;
+  font-weight: 600;
+  opacity: 0.95;
+}
+
+.session-count {
+  font-size: 12px;
+  opacity: 0.7;
+  background: rgba(255, 255, 255, 0.06);
+  padding: 2px 8px;
+  border-radius: 999px;
+}
+
+.session-date {
+  font-size: 12px;
+  opacity: 0.7;
+  margin-bottom: 12px;
+}
+
+.session-actions {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.select-btn {
+  background: rgba(42, 92, 255, 0.2);
+  border: 1px solid rgba(42, 92, 255, 0.3);
+  color: #8baaff;
+  padding: 6px 12px;
+  font-size: 12px;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: opacity 0.2s;
+}
+
+.select-btn:hover {
+  opacity: 0.8;
+}
+
+.current-badge {
+  background: rgba(110, 255, 179, 0.2);
+  border: 1px solid rgba(110, 255, 179, 0.3);
+  color: #6efeb3;
+  padding: 6px 12px;
+  font-size: 12px;
+  border-radius: 8px;
+  font-weight: 500;
+}
+
+.edit-btn {
+  background: rgba(255, 208, 96, 0.16);
+  border: 1px solid rgba(255, 208, 96, 0.3);
+  color: #ffd860;
+  padding: 6px 12px;
+  font-size: 12px;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: opacity 0.2s;
+}
+
+.edit-btn:hover {
+  opacity: 0.8;
+}
+
 /* 移动端图片预览优化 */
 @media (max-width: 768px) {
   .image-preview {

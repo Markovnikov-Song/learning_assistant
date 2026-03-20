@@ -58,12 +58,23 @@ export type ConversationHistory = {
   id: string
   user_id: string
   subject_id: string
+  session_id?: string | null
   question_type: 'ask' | 'solve'
   question: string
   answer: string
   citations: Citation[]
   found: boolean
   created_at: string
+}
+
+export type ConversationSession = {
+  id: string
+  user_id: string
+  subject_id: string
+  title: string
+  created_at: string
+  updated_at: string
+  message_count: number
 }
 
 const API_BASE = import.meta.env.VITE_API_BASE || 'http://localhost:8000'
@@ -153,10 +164,10 @@ export const api = {
   deleteDoc: (subjectId: string, docId: string) => http<{ deleted: boolean }>(`/subjects/${subjectId}/documents/${docId}`, { method: 'DELETE' }),
 
   // 问答和解题
-  ask: (subjectId: string, question: string) =>
-    http<AskResponse>(`/subjects/${subjectId}/ask`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ question }) }),
-  solve: (subjectId: string, problem_text: string) =>
-    http<SolveResponse>(`/subjects/${subjectId}/solve`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ problem_text }) }),
+  ask: (subjectId: string, question: string, conversation_id?: string | null) =>
+    http<AskResponse>(`/subjects/${subjectId}/ask`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ question, conversation_id }) }),
+  solve: (subjectId: string, problem_text: string, conversation_id?: string | null) =>
+    http<SolveResponse>(`/subjects/${subjectId}/solve`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ problem_text, conversation_id }) }),
 
   // 对话历史相关
   getHistory: (subjectId?: string) =>
@@ -183,6 +194,18 @@ export const api = {
     window.URL.revokeObjectURL(url)
     document.body.removeChild(a)
   },
+
+  // 会话管理相关
+  createSession: (subjectId: string, title: string) =>
+    http<ConversationSession>('/sessions', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ subject_id: subjectId, title }) }),
+  listSessions: (subjectId?: string) =>
+    http<ConversationSession[]>(`/sessions${subjectId ? `?subject_id=${subjectId}` : ''}`),
+  deleteSession: (sessionId: string) =>
+    http<{ deleted: boolean }>(`/sessions/${sessionId}`, { method: 'DELETE' }),
+  updateSession: (sessionId: string, title: string) =>
+    http<ConversationSession>(`/sessions/${sessionId}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ title }) }),
+  getSessionHistories: (sessionId: string) =>
+    http<ConversationHistory[]>(`/sessions/${sessionId}/histories`),
 }
 
 // 导出 token 管理函数

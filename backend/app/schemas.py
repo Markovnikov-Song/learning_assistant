@@ -67,7 +67,7 @@ class DocumentOut(BaseModel):
 
 class AskRequest(BaseModel):
     question: str = Field(min_length=1)
-    conversation_id: str | None = None
+    conversation_id: str | None = None  # 改为 conversation_id
 
 
 class Citation(BaseModel):
@@ -86,6 +86,7 @@ class AskResponse(BaseModel):
 
 class SolveRequest(BaseModel):
     problem_text: str = Field(min_length=1)
+    conversation_id: str | None = None  # 改为 conversation_id
 
 
 class SolveResponse(BaseModel):
@@ -94,23 +95,34 @@ class SolveResponse(BaseModel):
     citations: list[Citation]
 
 
-# 对话历史相关模型
+# 对话会话相关模型
+class ConversationSessionOut(BaseModel):
+    id: str
+    user_id: str
+    subject_id: str
+    title: str
+    created_at: datetime
+    updated_at: datetime
+    message_count: int = 0  # 消息数量（动态计算）
+
+
+class ConversationSessionCreate(BaseModel):
+    subject_id: str
+    title: str = "新对话"
+
+
+class ConversationSessionUpdate(BaseModel):
+    title: str | None = None
+
+
 class ConversationHistoryOut(BaseModel):
     id: str
     user_id: str
     subject_id: str
+    session_id: str | None
     question_type: Literal["ask", "solve"]
     question: str
     answer: str
     citations: list[Citation]
     found: bool
     created_at: datetime
-
-
-class ConversationHistoryCreate(BaseModel):
-    subject_id: str
-    question_type: Literal["ask", "solve"]
-    question: str
-    answer: str
-    citations: list[Citation]
-    found: bool = True

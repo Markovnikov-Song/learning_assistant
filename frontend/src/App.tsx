@@ -44,6 +44,12 @@ function App() {
   const [showHistory, setShowHistory] = useState(false)
   const [history, setHistory] = useState<api.ConversationHistory[]>([])
 
+  // 会话管理相关
+  const [sessions, setSessions] = useState<api.ConversationSession[]>([])
+  const [activeSessionId, setActiveSessionId] = useState<string>('')
+  const [showSessions, setShowSessions] = useState(false)
+  const [newSessionTitle, setNewSessionTitle] = useState('')
+
   // 拍照相关
   const [questionImage, setQuestionImage] = useState<File | null>(null)
   const [questionImagePreview, setQuestionImagePreview] = useState<string | null>(null)
@@ -163,6 +169,64 @@ function App() {
     } catch (e: any) {
       setErr(String(e?.message || e) || '导出失败')
     }
+  }
+
+  // 会话管理相关函数
+  async function fetchSessions() {
+    try {
+      const s = await api.listSessions(activeSubjectId || undefined)
+      setSessions(s)
+      setShowSessions(true)
+    } catch (e: any) {
+      setErr(String(e?.message || e) || '获取会话列表失败')
+    }
+  }
+
+  async function createSession() {
+    if (!activeSubjectId || !newSessionTitle.trim()) {
+      setErr('请输入会话标题')
+      return
+    }
+    try {
+      const session = await api.createSession(activeSubjectId, newSessionTitle.trim())
+      setSessions([session, ...sessions])
+      setActiveSessionId(session.id)
+      setNewSessionTitle('')
+      setSuccessMsg('会话创建成功')
+      setTimeout(() => setSuccessMsg(''), 3000)
+    } catch (e: any) {
+      setErr(String(e?.message || e) || '创建会话失败')
+    }
+  }
+
+  async function deleteSession(sessionId: string) {
+    try {
+      await api.deleteSession(sessionId)
+      setSessions(sessions.filter(s => s.id !== sessionId))
+      if (activeSessionId === sessionId) {
+        setActiveSessionId('')
+      }
+      setSuccessMsg('会话已删除')
+      setTimeout(() => setSuccessMsg(''), 3000)
+    } catch (e: any) {
+      setErr(String(e?.message || e) || '删除会话失败')
+    }
+  }
+
+  async function updateSessionTitle(sessionId: string, newTitle: string) {
+    try {
+      await api.updateSession(sessionId, newTitle)
+      setSessions(sessions.map(s => s.id === sessionId ? { ...s, title: newTitle } : s))
+      setSuccessMsg('会话标题已更新')
+      setTimeout(() => setSuccessMsg(''), 3000)
+    } catch (e: any) {
+      setErr(String(e?.message || e) || '更新会话标题失败')
+    }
+  }
+
+  function switchSession(sessionId: string) {
+    setActiveSessionId(sessionId)
+    setShowSessions(false)
   }
 
   // 如果未认证，显示登录界面
@@ -302,6 +366,14 @@ function App() {
           <button onClick={fetchHistory} disabled={!activeSubjectId} className="history-btn">
             📜 历史记录
           </button>
+          <button onClick={fetchSessions} disabled={!activeSubjectId} className="history-btn">
+            💬 会话
+          </button>
+          {activeSessionId && (
+            <button onClick={() => setActiveSessionId('')} className="history-btn" title="退出当前会话">
+              退出会话
+            </button>
+          )}
           {busy ? <span className="pill busy">{busy}</span> : <span className="pill ok">就绪</span>}
           {successMsg ? <span className="pill success">{successMsg}</span> : null}
           {err ? <span className="pill err">{err}</span> : null}
@@ -489,6 +561,11 @@ function App() {
 
         <section className="card">
           <h2>③ 问答（严格资料内生成）</h2>
+          {activeSessionId && (
+            <div className="active-session-info">
+              💬 当前会话: {sessions.find(s => s.id === activeSessionId)?.title || '未知会话'}
+            </div>
+          )}
           <textarea
             placeholder="在当前学科内提问，例如：给出傅里叶级数的定义并说明收敛条件（必须来自你上传的资料）。"
             value={question}
@@ -531,7 +608,7 @@ function App() {
                     setQuestionImage(null)
                     setQuestionImagePreview(null)
                   }
-                  const r = await api.ask(activeSubjectId, question.trim())
+                  const r = await api.ask(activeSubjectId, question.trim(), activeSessionId || null)
                   setAskResp(r)
                 } catch (e: any) {
                   setErr(String(e?.message || e))
@@ -591,6 +668,11 @@ function App() {
 
         <section className="card">
           <h2>解题（固定结构输出）</h2>
+          {activeSessionId && (
+            <div className="active-session-info">
+              💬 当前会话: {sessions.find(s => s.id === activeSessionId)?.title || '未知会话'}
+            </div>
+          )}
           <textarea
             placeholder="粘贴题目文本（图片OCR版P0先放后端扩展，下一步加）。"
             value={problem}
@@ -633,7 +715,7 @@ function App() {
                     setSolveImage(null)
                     setSolveImagePreview(null)
                   }
-                  const r = await api.solve(activeSubjectId, problem.trim())
+                  const r = await api.solve(activeSubjectId, problem.trim(), activeSessionId || null)
                   setSolveResp(r)
                 } catch (e: any) {
                   setErr(String(e?.message || e))
@@ -727,6 +809,75 @@ function App() {
                           📥 导出
                         </button>
                         <button onClick={() => deleteHistory(h.id)} className="delete-btn">
+                          🗑️ 删除
+                        </button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* 会话管理模态对话框 */}
+      {showSessions && (
+        <div className="modal-overlay" onClick={() => setShowSessions(false)}>
+          <div className="modal-content" onClick={(e) => e.stopPropagation()}>
+            <div className="modal-header">
+              <h3>会话管理</h3>
+              <button onClick={() => setShowSessions(false)} className="close-btn">✕</button>
+            </div>
+            <div className="modal-body">
+              {/* 新建会话 */}
+              <div className="new-session-section">
+                <input
+                  placeholder="新会话标题"
+                  value={newSessionTitle}
+                  onChange={(e) => setNewSessionTitle(e.target.value)}
+                />
+                <button onClick={createSession} disabled={!newSessionTitle.trim()}>
+                  + 新建会话
+                </button>
+              </div>
+
+              {/* 会话列表 */}
+              {sessions.length === 0 ? (
+                <p className="muted">暂无会话</p>
+              ) : (
+                <div className="session-list">
+                  {sessions.map((s) => (
+                    <div key={s.id} className={`session-item ${activeSessionId === s.id ? 'active' : ''}`}>
+                      <div className="session-header">
+                        <span className="session-title">{s.title}</span>
+                        <span className="session-count">{s.message_count} 条消息</span>
+                      </div>
+                      <div className="session-date">
+                        {new Date(s.updated_at).toLocaleString('zh-CN')}
+                      </div>
+                      <div className="session-actions">
+                        {activeSessionId !== s.id && (
+                          <button onClick={() => switchSession(s.id)} className="select-btn">
+                            进入会话
+                          </button>
+                        )}
+                        {activeSessionId === s.id && (
+                          <span className="current-badge">当前会话</span>
+                        )}
+                        <button onClick={() => {
+                          const newTitle = prompt('修改会话标题:', s.title)
+                          if (newTitle && newTitle.trim()) {
+                            updateSessionTitle(s.id, newTitle.trim())
+                          }
+                        }} className="edit-btn">
+                          ✏️ 编辑
+                        </button>
+                        <button onClick={() => {
+                          if (confirm(`确定要删除会话「${s.title}」吗？`)) {
+                            deleteSession(s.id)
+                          }
+                        }} className="delete-btn">
                           🗑️ 删除
                         </button>
                       </div>

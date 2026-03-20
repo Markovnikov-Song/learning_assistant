@@ -27,8 +27,8 @@ def get_embeddings() -> Embeddings:
             model=settings.llm_embedding_model,
             api_key=settings.llm_api_key,
             base_url=settings.llm_base_url,
-            timeout=30,  # 添加超时设置
-            max_retries=3,  # 添加重试机制
+            timeout=60,  # 增加超时时间到 60 秒
+            max_retries=5,  # 增加重试次数到 5 次
         )
     except Exception as e:
         raise ValueError(f"Failed to initialize embeddings: {str(e)}")
@@ -54,8 +54,8 @@ def get_embeddings_with_options(
             api_key=settings.llm_api_key,
             base_url=settings.llm_base_url,
             batch_size=batch_size,
-            timeout=30,
-            max_retries=3,
+            timeout=60,
+            max_retries=5,
         )
     except Exception as e:
         raise ValueError(f"Failed to initialize embeddings with options: {str(e)}")

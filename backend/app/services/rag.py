@@ -127,9 +127,20 @@ def hybrid_retrieve(subject_id: str, question: str, db: Session) -> list[dict[st
     return merged[: settings.retrieval_top_k]
 
 
-def answer_question(subject_id: str, question: str, db: Session) -> tuple[bool, str, list[Citation]]:
+def answer_question(
+    subject_id: str,
+    question: str,
+    db: Session,
+    conversation_history: list[dict[str, Any]] | None = None,
+) -> tuple[bool, str, list[Citation]]:
     """
     回答用户问题
+    
+    Args:
+        subject_id: 学科ID
+        question: 用户问题
+        db: 数据库会话
+        conversation_history: 对话历史记录，格式为 [{"question": "...", "answer": "..."}, ...]
     """
     try:
         chunks = hybrid_retrieve(subject_id, question, db)
@@ -145,19 +156,30 @@ def answer_question(subject_id: str, question: str, db: Session) -> tuple[bool, 
             ]
         )
 
+        # 构建对话历史上下文
+        history_context = ""
+        if conversation_history:
+            history_context = "\n\n【对话历史】\n"
+            for idx, hist in enumerate(conversation_history[-5:]):  # 只使用最近5条历史
+                history_context += f"Q{idx+1}: {hist['question']}\nA{idx+1}: {hist['answer']}\n\n"
+
         llm = get_chat_llm()
         # 使用RunnableSequence优化调用
         chain = RunnableSequence(
             lambda x: [
                 SystemMessage(content=SYSTEM_GUARDRAILS),
                 HumanMessage(
-                    content=f"【资料证据片段】\n{x['context']}\n\n【用户问题】\n{x['question']}\n\n请基于证据作答，并在文末用列表给出你使用到的证据编号与对应来源。"
+                    content=f"{x['history_context']}【资料证据片段】\n{x['context']}\n\n【用户问题】\n{x['question']}\n\n请基于证据作答，并在文末用列表给出你使用到的证据编号与对应来源。"
                 ),
             ],
             llm,
             StrOutputParser()
         )
-        answer = chain.invoke({"context": context, "question": question})
+        answer = chain.invoke({
+            "history_context": history_context,
+            "context": context,
+            "question": question
+        })
         return True, answer, _build_citations(chunks)
     except Exception as e:
         return False, f"处理问题时出错：{str(e)}", []
@@ -170,9 +192,20 @@ SOLVE_GUARDRAILS = SYSTEM_GUARDRAILS + """
 """
 
 
-def solve_problem(subject_id: str, problem_text: str, db: Session) -> tuple[bool, str, list[Citation]]:
+def solve_problem(
+    subject_id: str,
+    problem_text: str,
+    db: Session,
+    conversation_history: list[dict[str, Any]] | None = None,
+) -> tuple[bool, str, list[Citation]]:
     """
     解决数学问题
+    
+    Args:
+        subject_id: 学科ID
+        problem_text: 题目文本
+        db: 数据库会话
+        conversation_history: 对话历史记录，格式为 [{"question": "...", "answer": "..."}, ...]
     """
     try:
         chunks = hybrid_retrieve(subject_id, problem_text, db)
@@ -188,19 +221,30 @@ def solve_problem(subject_id: str, problem_text: str, db: Session) -> tuple[bool
             ]
         )
 
+        # 构建对话历史上下文
+        history_context = ""
+        if conversation_history:
+            history_context = "\n\n【对话历史】\n"
+            for idx, hist in enumerate(conversation_history[-5:]):  # 只使用最近5条历史
+                history_context += f"Q{idx+1}: {hist['question']}\nA{idx+1}: {hist['answer']}\n\n"
+
         llm = get_chat_llm()
         # 使用RunnableSequence优化调用
         chain = RunnableSequence(
             lambda x: [
                 SystemMessage(content=SOLVE_GUARDRAILS),
                 HumanMessage(
-                    content=f"【资料证据片段】\n{x['context']}\n\n【题目】\n{x['problem']}\n\n请严格按固定结构输出，使用 LaTeX 表达公式。"
+                    content=f"{x['history_context']}【资料证据片段】\n{x['context']}\n\n【题目】\n{x['problem']}\n\n请严格按固定结构输出，使用 LaTeX 表达公式。"
                 ),
             ],
             llm,
             StrOutputParser()
         )
-        output = chain.invoke({"context": context, "problem": problem_text})
+        output = chain.invoke({
+            "history_context": history_context,
+            "context": context,
+            "problem": problem_text
+        })
         return True, output, _build_citations(chunks)
     except Exception as e:
         return False, f"处理问题时出错：{str(e)}", []

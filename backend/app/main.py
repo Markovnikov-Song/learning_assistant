@@ -20,6 +20,9 @@ from backend.app.schemas import (
     AskResponse,
     Citation,
     ConversationHistoryOut,
+    ConversationSessionCreate,
+    ConversationSessionOut,
+    ConversationSessionUpdate,
     DocumentOut,
     SolveRequest,
     SolveResponse,
@@ -278,12 +281,43 @@ def delete_document(subject_id: str, document_id: str, db: Session = Depends(get
 @app.post("/subjects/{subject_id}/ask", response_model=AskResponse)
 def ask(subject_id: str, payload: AskRequest, current_user: models.User = Depends(get_current_user), db: Session = Depends(get_db)) -> AskResponse:
     _subject_or_404(subject_id, db)
-    found, answer, citations = answer_question(subject_id, payload.question, db)
+    
+    # 如果提供了conversation_id，验证会话是否存在并获取历史记录
+    conversation_history = None
+    session_id = None
+    
+    if payload.conversation_id:
+        session = db.query(models.ConversationSession).filter(
+            models.ConversationSession.id == payload.conversation_id,
+            models.ConversationSession.user_id == current_user.id,
+            models.ConversationSession.subject_id == subject_id,
+        ).one_or_none()
+        
+        if not session:
+            raise HTTPException(status_code=404, detail="会话不存在或不属于当前学科")
+        
+        session_id = session.id
+        
+        # 获取该会话的历史记录
+        histories = db.query(models.ConversationHistory).filter(
+            models.ConversationHistory.session_id == session_id,
+            models.ConversationHistory.deleted == False,
+        ).order_by(models.ConversationHistory.created_at.asc()).all()
+        
+        if histories:
+            conversation_history = [
+                {"question": h.question, "answer": h.answer}
+                for h in histories
+            ]
+    
+    # 调用answer_question，传入历史记录
+    found, answer, citations = answer_question(subject_id, payload.question, db, conversation_history)
     
     # 保存对话历史
     history = models.ConversationHistory(
         user_id=current_user.id,
         subject_id=subject_id,
+        session_id=session_id,
         question_type="ask",
         question=payload.question,
         answer=answer,
@@ -293,18 +327,59 @@ def ask(subject_id: str, payload: AskRequest, current_user: models.User = Depend
     db.add(history)
     db.commit()
     
+    # 更新会话的updated_at时间
+    if session_id:
+        session = db.query(models.ConversationSession).filter(
+            models.ConversationSession.id == session_id
+        ).first()
+        if session:
+            session.updated_at = datetime.utcnow()
+            db.add(session)
+            db.commit()
+    
     return AskResponse(answer=answer, citations=citations, found=found, conversation_id=payload.conversation_id)
 
 
 @app.post("/subjects/{subject_id}/solve", response_model=SolveResponse)
 def solve(subject_id: str, payload: SolveRequest, current_user: models.User = Depends(get_current_user), db: Session = Depends(get_db)) -> SolveResponse:
     _subject_or_404(subject_id, db)
-    found, out_md, citations = solve_problem(subject_id, payload.problem_text, db)
+    
+    # 如果提供了conversation_id，验证会话是否存在并获取历史记录
+    conversation_history = None
+    session_id = None
+    
+    if payload.conversation_id:
+        session = db.query(models.ConversationSession).filter(
+            models.ConversationSession.id == payload.conversation_id,
+            models.ConversationSession.user_id == current_user.id,
+            models.ConversationSession.subject_id == subject_id,
+        ).one_or_none()
+        
+        if not session:
+            raise HTTPException(status_code=404, detail="会话不存在或不属于当前学科")
+        
+        session_id = session.id
+        
+        # 获取该会话的历史记录
+        histories = db.query(models.ConversationHistory).filter(
+            models.ConversationHistory.session_id == session_id,
+            models.ConversationHistory.deleted == False,
+        ).order_by(models.ConversationHistory.created_at.asc()).all()
+        
+        if histories:
+            conversation_history = [
+                {"question": h.question, "answer": h.answer}
+                for h in histories
+            ]
+    
+    # 调用solve_problem，传入历史记录
+    found, out_md, citations = solve_problem(subject_id, payload.problem_text, db, conversation_history)
     
     # 保存对话历史
     history = models.ConversationHistory(
         user_id=current_user.id,
         subject_id=subject_id,
+        session_id=session_id,
         question_type="solve",
         question=payload.problem_text,
         answer=out_md,
@@ -314,7 +389,152 @@ def solve(subject_id: str, payload: SolveRequest, current_user: models.User = De
     db.add(history)
     db.commit()
     
+    # 更新会话的updated_at时间
+    if session_id:
+        session = db.query(models.ConversationSession).filter(
+            models.ConversationSession.id == session_id
+        ).first()
+        if session:
+            session.updated_at = datetime.utcnow()
+            db.add(session)
+            db.commit()
+    
     return SolveResponse(found=found, output_markdown=out_md, citations=citations)
+
+
+# ==================== 对话会话管理端点 ====================
+
+@app.post("/sessions", response_model=ConversationSessionOut)
+def create_session(
+    payload: ConversationSessionCreate,
+    current_user: models.User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+) -> models.ConversationSession:
+    """创建新的对话会话"""
+    # 验证学科是否存在
+    _subject_or_404(payload.subject_id, db)
+    
+    session = models.ConversationSession(
+        user_id=current_user.id,
+        subject_id=payload.subject_id,
+        title=payload.title or "新对话",
+    )
+    db.add(session)
+    db.commit()
+    db.refresh(session)
+    return session
+
+
+@app.get("/sessions", response_model=list[ConversationSessionOut])
+def list_sessions(
+    subject_id: str | None = None,
+    current_user: models.User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+) -> list[dict]:
+    """获取当前用户的所有对话会话"""
+    query = db.query(models.ConversationSession).filter(
+        models.ConversationSession.user_id == current_user.id,
+        models.ConversationSession.deleted == False,
+    )
+    
+    if subject_id:
+        query = query.filter(models.ConversationSession.subject_id == subject_id)
+    
+    sessions = query.order_by(models.ConversationSession.updated_at.desc()).all()
+    
+    # 添加消息数量统计
+    result = []
+    for s in sessions:
+        message_count = db.query(models.ConversationHistory).filter(
+            models.ConversationHistory.session_id == s.id,
+            models.ConversationHistory.deleted == False,
+        ).count()
+        
+        result.append({
+            "id": s.id,
+            "user_id": s.user_id,
+            "subject_id": s.subject_id,
+            "title": s.title,
+            "created_at": s.created_at,
+            "updated_at": s.updated_at,
+            "message_count": message_count,
+        })
+    
+    return result
+
+
+@app.delete("/sessions/{session_id}")
+def delete_session(
+    session_id: str,
+    current_user: models.User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+) -> dict:
+    """删除指定的对话会话"""
+    session = db.query(models.ConversationSession).filter(
+        models.ConversationSession.id == session_id,
+        models.ConversationSession.user_id == current_user.id,
+    ).one_or_none()
+    
+    if not session:
+        raise HTTPException(status_code=404, detail="会话不存在")
+    
+    # 软删除会话（历史记录会被级联软删除或保持原样）
+    session.deleted = True
+    db.add(session)
+    db.commit()
+    
+    return {"deleted": True}
+
+
+@app.patch("/sessions/{session_id}", response_model=ConversationSessionOut)
+def update_session(
+    session_id: str,
+    payload: ConversationSessionUpdate,
+    current_user: models.User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+) -> models.ConversationSession:
+    """更新对话会话标题"""
+    session = db.query(models.ConversationSession).filter(
+        models.ConversationSession.id == session_id,
+        models.ConversationSession.user_id == current_user.id,
+    ).one_or_none()
+    
+    if not session:
+        raise HTTPException(status_code=404, detail="会话不存在")
+    
+    if payload.title is not None:
+        session.title = payload.title
+    
+    session.updated_at = datetime.utcnow()
+    db.add(session)
+    db.commit()
+    db.refresh(session)
+    
+    return session
+
+
+@app.get("/sessions/{session_id}/histories", response_model=list[ConversationHistoryOut])
+def get_session_histories(
+    session_id: str,
+    current_user: models.User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+) -> list[models.ConversationHistory]:
+    """获取指定会话的所有对话历史"""
+    # 验证会话是否存在且属于当前用户
+    session = db.query(models.ConversationSession).filter(
+        models.ConversationSession.id == session_id,
+        models.ConversationSession.user_id == current_user.id,
+    ).one_or_none()
+    
+    if not session:
+        raise HTTPException(status_code=404, detail="会话不存在")
+    
+    histories = db.query(models.ConversationHistory).filter(
+        models.ConversationHistory.session_id == session_id,
+        models.ConversationHistory.deleted == False,
+    ).order_by(models.ConversationHistory.created_at.asc()).all()
+    
+    return histories
 
 
 # ==================== 对话历史管理端点 ====================

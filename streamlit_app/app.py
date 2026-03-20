@@ -22,6 +22,8 @@ if BACKEND_DIR not in sys.path:
 # 3. 其他基础导入
 import shutil
 import tempfile
+import time
+import datetime as dt
 from pathlib import Path
 
 import streamlit as st
@@ -230,6 +232,9 @@ with st.sidebar:
     subj_options = {f"{s['name']}（{s['category']}）": s["id"] for s in subjects}
     subj_label = st.selectbox("选择学科", options=["（新建/选择）"] + list(subj_options.keys()))
 
+    # 定义 subject_id（在侧边栏中定义，以便后面使用）
+    subject_id = None if subj_label == "（新建/选择）" else subj_options[subj_label]
+
     # 删除学科按钮
     if subj_label != "（新建/选择）":
         if st.button("🗑️ 删除当前学科", type="secondary", use_container_width=True):
@@ -262,6 +267,123 @@ with st.sidebar:
         st.rerun()
 
     st.divider()
+    
+    # 会话管理
+    if subject_id:
+        st.markdown("**💬 会话管理**")
+        
+        # 初始化会话相关状态
+        if "show_sessions" not in st.session_state:
+            st.session_state.show_sessions = False
+        if "active_session_id" not in st.session_state:
+            st.session_state.active_session_id = ""
+        
+        # 显示当前活动会话
+        if st.session_state.active_session_id:
+            with SessionLocal() as db:
+                active_session = db.query(models.ConversationSession).filter(
+                    models.ConversationSession.id == st.session_state.active_session_id,
+                    models.ConversationSession.user_id == st.session_state.user_id,
+                    models.ConversationSession.subject_id == subject_id,
+                ).first()
+                if active_session:
+                    st.info(f"当前会话: {active_session.title}")
+                    if st.button("退出会话", key="exit_session", use_container_width=True):
+                        st.session_state.active_session_id = ""
+                        st.rerun()
+        
+        # 切换会话管理面板
+        if st.button("管理会话", use_container_width=True):
+            st.session_state.show_sessions = not st.session_state.show_sessions
+            st.rerun()
+        
+        # 会话管理面板
+        if st.session_state.show_sessions:
+            st.divider()
+            
+            # 新建会话
+            with st.expander("新建会话", expanded=False):
+                new_session_title = st.text_input("会话标题", placeholder="如：复习第1章")
+                if st.button("创建会话", use_container_width=True, disabled=not new_session_title.strip()):
+                    with SessionLocal() as db:
+                        session = models.ConversationSession(
+                            user_id=st.session_state.user_id,
+                            subject_id=subject_id,
+                            title=new_session_title.strip(),
+                        )
+                        db.add(session)
+                        db.commit()
+                        st.toast(f"会话「{new_session_title.strip()}」创建成功！", icon="✅")
+                        st.rerun()
+            
+            # 会话列表
+            st.markdown("**会话列表**")
+            with SessionLocal() as db:
+                sessions = db.query(models.ConversationSession).filter(
+                    models.ConversationSession.user_id == st.session_state.user_id,
+                    models.ConversationSession.subject_id == subject_id,
+                    models.ConversationSession.deleted == False,
+                ).order_by(models.ConversationSession.updated_at.desc()).all()
+            
+            if not sessions:
+                st.info("暂无会话")
+            else:
+                for s in sessions:
+                    # 计算消息数量
+                    with SessionLocal() as db:
+                        message_count = db.query(models.ConversationHistory).filter(
+                            models.ConversationHistory.session_id == s.id,
+                            models.ConversationHistory.deleted == False,
+                        ).count()
+                    
+                    with st.expander(f"{s.title} ({message_count} 条消息)", expanded=(s.id == st.session_state.active_session_id)):
+                        col1, col2, col3 = st.columns([1, 1, 1])
+                        
+                        with col1:
+                            if s.id != st.session_state.active_session_id:
+                                if st.button("进入", key=f"enter_{s.id}", use_container_width=True):
+                                    st.session_state.active_session_id = s.id
+                                    st.rerun()
+                            else:
+                                st.success("当前会话")
+                        
+                        with col2:
+                            if st.button("编辑标题", key=f"edit_{s.id}", use_container_width=True):
+                                new_title = st.text_input("新标题", value=s.title, key=f"title_{s.id}")
+                                if st.button("保存", key=f"save_{s.id}"):
+                                    with SessionLocal() as db:
+                                        session = db.query(models.ConversationSession).filter(
+                                            models.ConversationSession.id == s.id
+                                        ).first()
+                                        if session:
+                                            session.title = new_title
+                                            session.updated_at = dt.datetime.utcnow()
+                                            db.add(session)
+                                            db.commit()
+                                            st.toast("标题已更新", icon="✅")
+                                            st.rerun()
+                        
+                        with col3:
+                            if st.button("删除", key=f"delete_{s.id}", use_container_width=True, type="secondary"):
+                                if st.session_state.active_session_id == s.id:
+                                    st.session_state.active_session_id = ""
+                                with SessionLocal() as db:
+                                    session = db.query(models.ConversationSession).filter(
+                                        models.ConversationSession.id == s.id
+                                    ).first()
+                                    if session:
+                                        session.deleted = True
+                                        db.add(session)
+                                        db.commit()
+                                        st.toast("会话已删除", icon="🗑️")
+                                        st.rerun()
+            
+            if st.button("关闭会话管理", use_container_width=True):
+                st.session_state.show_sessions = False
+                st.rerun()
+        
+        st.divider()
+    
     st.markdown("**📜 历史记录**")
     if st.button("查看历史记录", use_container_width=True, disabled=not subject_id):
         history = list_history(subject_id, st.session_state.user_id)
@@ -308,8 +430,6 @@ with st.sidebar:
             st.info("暂无历史记录")
 
 
-subject_id = None if subj_label == "（新建/选择）" else subj_options[subj_label]
-
 col1, col2 = st.columns([1, 1], gap="large")
 
 with col1:
@@ -317,19 +437,39 @@ with col1:
     if not subject_id:
         st.info("请先在左侧选择或创建一个学科。")
     else:
+        st.caption("💡 小贴士：500页的书籍约需20-60分钟处理，处理期间请保持页面打开")
         up = st.file_uploader(
             "支持 PDF/Word/PPT/Excel/TXT/Markdown/图片（图片OCR在Cloud默认关闭）",
             type=None,
             accept_multiple_files=False,
         )
         if up is not None:
+            # 检查文件大小并给出警告
+            file_size_mb = len(up.getbuffer()) / (1024 * 1024)
+            if file_size_mb > 10:  # 超过10MB
+                st.warning(f"⚠️ 文件较大（{file_size_mb:.1f}MB），处理可能需要较长时间，请耐心等待。建议先关闭其他标签页以提高处理速度。")
+            elif file_size_mb > 5:  # 超过5MB
+                st.info(f"ℹ️ 文件大小：{file_size_mb:.1f}MB，处理可能需要几分钟...")
+            
             doc_status = None
             doc_source_name = None
             doc_error = None
-            with st.spinner("上传并解析入库中…"):
+            
+            # 创建进度条和状态容器
+            progress_bar = st.progress(0, "准备上传...")
+            status_text = st.empty()
+            
+            def update_progress(current: int, total: int, message: str):
+                """进度更新回调函数"""
+                progress = current / total
+                progress_bar.progress(progress, f"{message} ({current}/{total})")
+                status_text.text(message)
+            
+            try:
                 with tempfile.TemporaryDirectory() as td:
                     tmp_path = Path(td) / up.name
                     tmp_path.write_bytes(up.getbuffer())
+                    
                     with SessionLocal() as db:
                         doc = save_upload(
                             subject_id=subject_id,
@@ -337,15 +477,30 @@ with col1:
                             original_name=up.name,
                             mime_type=up.type or "application/octet-stream",
                             db=db,
+                            progress_callback=update_progress,
                         )
                         # 在会话关闭前获取需要的属性
                         doc_status = doc.status
                         doc_source_name = doc.source_name
                         doc_error = doc.error
-            if doc_status == "ready":
-                st.success(f"入库完成：{doc_source_name}")
-            else:
-                st.error(f"入库失败：{doc_error or '未知错误'}")
+                
+                # 更新进度到100%
+                progress_bar.progress(1.0, "处理完成！")
+                status_text.text("处理完成！")
+                
+                # 清空进度条和状态文本
+                time.sleep(1)
+                progress_bar.empty()
+                status_text.empty()
+                
+                if doc_status == "ready":
+                    st.success(f"✅ 入库完成：{doc_source_name}")
+                else:
+                    st.error(f"❌ 入库失败：{doc_error or '未知错误'}")
+            except Exception as e:
+                progress_bar.empty()
+                status_text.empty()
+                st.error(f"❌ 处理出错：{str(e)}")
 
         st.divider()
         st.markdown("**已上传资料**")
@@ -377,7 +532,46 @@ with col2:
             if st.button("提问", key="ask_btn", disabled=not q.strip()):
                 with st.spinner("检索并生成回答…"):
                     with SessionLocal() as db:
-                        found, ans, cites = answer_question(subject_id, q.strip(), db)
+                        # 获取会话历史（如果有活动会话）
+                        conversation_history = None
+                        if st.session_state.get("active_session_id"):
+                            histories = db.query(models.ConversationHistory).filter(
+                                models.ConversationHistory.session_id == st.session_state.active_session_id,
+                                models.ConversationHistory.deleted == False,
+                            ).order_by(models.ConversationHistory.created_at.asc()).all()
+                            
+                            if histories:
+                                conversation_history = [
+                                    {"question": h.question, "answer": h.answer}
+                                    for h in histories[-5:]  # 只使用最近5条历史
+                                ]
+                        
+                        found, ans, cites = answer_question(subject_id, q.strip(), db, conversation_history)
+                        
+                        # 保存对话历史
+                        history = models.ConversationHistory(
+                            user_id=st.session_state.user_id,
+                            subject_id=subject_id,
+                            session_id=st.session_state.get("active_session_id"),
+                            question_type="ask",
+                            question=q.strip(),
+                            answer=ans,
+                            citations=json.dumps([c.model_dump() for c in cites]),
+                            found=found,
+                        )
+                        db.add(history)
+                        db.commit()
+                        
+                        # 更新会话的updated_at时间
+                        if st.session_state.get("active_session_id"):
+                            session = db.query(models.ConversationSession).filter(
+                                models.ConversationSession.id == st.session_state.active_session_id
+                            ).first()
+                            if session:
+                                session.updated_at = dt.datetime.utcnow()
+                                db.add(session)
+                                db.commit()
+                
                 st.markdown("### 输出")
                 st.code(ans, language="markdown")
                 if cites:
@@ -390,7 +584,46 @@ with col2:
             if st.button("解题", key="solve_btn", disabled=not p.strip()):
                 with st.spinner("检索并生成解题…"):
                     with SessionLocal() as db:
-                        found, out_md, cites = solve_problem(subject_id, p.strip(), db)
+                        # 获取会话历史（如果有活动会话）
+                        conversation_history = None
+                        if st.session_state.get("active_session_id"):
+                            histories = db.query(models.ConversationHistory).filter(
+                                models.ConversationHistory.session_id == st.session_state.active_session_id,
+                                models.ConversationHistory.deleted == False,
+                            ).order_by(models.ConversationHistory.created_at.asc()).all()
+                            
+                            if histories:
+                                conversation_history = [
+                                    {"question": h.question, "answer": h.answer}
+                                    for h in histories[-5:]  # 只使用最近5条历史
+                                ]
+                        
+                        found, out_md, cites = solve_problem(subject_id, p.strip(), db, conversation_history)
+                        
+                        # 保存对话历史
+                        history = models.ConversationHistory(
+                            user_id=st.session_state.user_id,
+                            subject_id=subject_id,
+                            session_id=st.session_state.get("active_session_id"),
+                            question_type="solve",
+                            question=p.strip(),
+                            answer=out_md,
+                            citations=json.dumps([c.model_dump() for c in cites]),
+                            found=found,
+                        )
+                        db.add(history)
+                        db.commit()
+                        
+                        # 更新会话的updated_at时间
+                        if st.session_state.get("active_session_id"):
+                            session = db.query(models.ConversationSession).filter(
+                                models.ConversationSession.id == st.session_state.active_session_id
+                            ).first()
+                            if session:
+                                session.updated_at = dt.datetime.utcnow()
+                                db.add(session)
+                                db.commit()
+                
                 st.markdown("### 输出")
                 st.code(out_md, language="markdown")
                 if cites:
