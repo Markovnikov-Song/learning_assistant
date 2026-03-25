@@ -39,7 +39,10 @@ class Settings(BaseSettings):
     model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8", extra="ignore")
 
     app_env: Literal["local_single", "cloud_multi"] = "local_single"
-    data_dir: Path = Path("data")
+    data_dir: Path = Path(os.environ.get("DATA_DIR", "data"))
+
+    # 云端 PostgreSQL 连接串（留空则使用本地 SQLite）
+    database_url: str | None = None
 
     # RAG defaults (must be deterministic to reduce hallucinations)
     temperature: float = 0.0
@@ -87,3 +90,7 @@ if _llm_embedding_model:
 _jwt_secret = _get_env_value("JWT_SECRET")
 if _jwt_secret:
     settings.jwt_secret = _jwt_secret
+
+_database_url = _get_env_value("DATABASE_URL")
+if _database_url:
+    settings.database_url = _database_url

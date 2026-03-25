@@ -34,8 +34,9 @@ from backend.app.schemas import (
     UserOut,
     UserRegister,
 )
-from backend.app.services.ingest import rebuild_subject_index, save_upload
+from backend.app.services.ingest import save_upload
 from backend.app.services.rag import answer_question, solve_problem
+from backend.app.services.vectorstore import rebuild_subject_index
 from backend.app.settings import settings
 
 
