@@ -20,6 +20,7 @@ if BACKEND_DIR not in sys.path:
     sys.path.insert(0, BACKEND_DIR)
 
 # 3. 其他基础导入
+import json
 import shutil
 import tempfile
 import time
@@ -56,18 +57,23 @@ if hasattr(st, 'secrets'):
         settings.llm_embedding_model = st.secrets['LLM_EMBEDDING_MODEL']
     if 'JWT_SECRET' in st.secrets:
         settings.jwt_secret = st.secrets['JWT_SECRET']
+    if 'DATABASE_URL' in st.secrets:
+        db_url = st.secrets['DATABASE_URL']
+        os.environ["DATABASE_URL"] = db_url
+        settings.database_url = db_url
+    if 'DATA_DIR' in st.secrets:
+        os.environ["DATA_DIR"] = st.secrets['DATA_DIR']
+        settings.data_dir = Path(st.secrets['DATA_DIR'])
 
 
 def _ensure_data_dir() -> None:
-    # Streamlit Cloud: 使用持久化目录
     if "DATA_DIR" not in os.environ:
-        # 优先使用 Streamlit Cloud 的持久化目录
-        # 如果不存在，使用相对路径
         data_path = Path("/mount/data")
         if data_path.exists() or os.path.exists("/mount"):
             os.environ["DATA_DIR"] = str(data_path.absolute())
         else:
-            os.environ["DATA_DIR"] = str(Path("data").absolute())
+            os.environ["DATA_DIR"] = str(Path(ROOT_DIR) / "data")
+    settings.data_dir = Path(os.environ["DATA_DIR"])
 
 
 _ensure_data_dir()
