@@ -39,6 +39,7 @@ def _pgvector_store(subject_id: str):
         connection_string=_pg_connection_string(),
         embedding_function=get_embeddings(),
         pre_delete_collection=False,
+        use_jsonb=True,
     )
 
 
@@ -50,6 +51,7 @@ def _pgvector_add(subject_id: str, documents: List[LCDocument]) -> None:
         collection_name=_pg_collection(subject_id),
         connection_string=_pg_connection_string(),
         pre_delete_collection=False,
+        use_jsonb=True,
     )
 
 
