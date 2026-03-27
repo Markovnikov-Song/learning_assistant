@@ -68,11 +68,23 @@ if hasattr(st, 'secrets'):
 
 def _ensure_data_dir() -> None:
     if "DATA_DIR" not in os.environ:
-        data_path = Path("/mount/data")
-        if data_path.exists() or os.path.exists("/mount"):
-            os.environ["DATA_DIR"] = str(data_path.absolute())
-        else:
-            os.environ["DATA_DIR"] = str(Path(ROOT_DIR) / "data")
+        # Streamlit Cloud 上 /mount/data 没有写权限，用 /tmp 代替
+        # /tmp 在 Streamlit Cloud 上可写，但重启会清空（文件用 DB 持久化）
+        candidates = [
+            Path("/tmp/learning_assistant_data"),
+            Path(ROOT_DIR) / "data",
+        ]
+        for p in candidates:
+            try:
+                p.mkdir(parents=True, exist_ok=True)
+                # 测试写权限
+                test_file = p / ".write_test"
+                test_file.touch()
+                test_file.unlink()
+                os.environ["DATA_DIR"] = str(p)
+                break
+            except (PermissionError, OSError):
+                continue
     settings.data_dir = Path(os.environ["DATA_DIR"])
 
 
