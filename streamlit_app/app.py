@@ -32,7 +32,7 @@ import streamlit as st
 # 4. 导入 backend 模块（此时 sys.path 已正确，且无循环）
 # 使用绝对导入
 try:
-    from backend.app.db import SessionLocal, init_db
+    from backend.app.db import SessionLocal, init_db, reset_engine
     from backend.app.settings import settings
     from backend.app import models
     from backend.app.services.ingest import save_upload
@@ -61,31 +61,43 @@ if hasattr(st, 'secrets'):
         db_url = st.secrets['DATABASE_URL']
         os.environ["DATABASE_URL"] = db_url
         settings.database_url = db_url
+        reset_engine()  # 强制用新的 DATABASE_URL 重建连接池
     if 'DATA_DIR' in st.secrets:
         os.environ["DATA_DIR"] = st.secrets['DATA_DIR']
         settings.data_dir = Path(st.secrets['DATA_DIR'])
 
 
 def _ensure_data_dir() -> None:
-    if "DATA_DIR" not in os.environ:
-        # Streamlit Cloud 上 /mount/data 没有写权限，用 /tmp 代替
-        # /tmp 在 Streamlit Cloud 上可写，但重启会清空（文件用 DB 持久化）
-        candidates = [
-            Path("/tmp/learning_assistant_data"),
-            Path(ROOT_DIR) / "data",
-        ]
-        for p in candidates:
-            try:
-                p.mkdir(parents=True, exist_ok=True)
-                # 测试写权限
-                test_file = p / ".write_test"
-                test_file.touch()
-                test_file.unlink()
-                os.environ["DATA_DIR"] = str(p)
-                break
-            except (PermissionError, OSError):
-                continue
-    settings.data_dir = Path(os.environ["DATA_DIR"])
+    # 每次都验证写权限，不信任已有的环境变量
+    candidates = [
+        Path("/tmp/learning_assistant_data"),
+        Path(ROOT_DIR) / "data",
+    ]
+    # 如果已有 DATA_DIR 且可写，直接用
+    existing = os.environ.get("DATA_DIR")
+    if existing:
+        p = Path(existing)
+        try:
+            p.mkdir(parents=True, exist_ok=True)
+            test_file = p / ".write_test"
+            test_file.touch()
+            test_file.unlink()
+            settings.data_dir = p
+            return
+        except (PermissionError, OSError):
+            pass  # 不可写，继续找
+    # 找第一个可写的目录
+    for p in candidates:
+        try:
+            p.mkdir(parents=True, exist_ok=True)
+            test_file = p / ".write_test"
+            test_file.touch()
+            test_file.unlink()
+            os.environ["DATA_DIR"] = str(p)
+            settings.data_dir = p
+            return
+        except (PermissionError, OSError):
+            continue
 
 
 _ensure_data_dir()
