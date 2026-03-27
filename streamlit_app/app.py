@@ -514,13 +514,36 @@ with col1:
                 .order_by(models.Document.created_at.desc())
                 .all()
             )
-        if not docs:
+            doc_list = [(d.id, d.source_name, d.status, d.error) for d in docs]
+
+        if not doc_list:
             st.caption("暂无资料。")
         else:
-            for d in docs:
-                st.write(f"- `{d.source_name}` · {d.status}")
-                if d.error:
-                    st.caption(f"错误：{d.error}")
+            for doc_id, doc_name, doc_status_val, doc_error_val in doc_list:
+                col_name, col_del = st.columns([5, 1])
+                with col_name:
+                    status_icon = "✅" if doc_status_val == "ready" else "❌"
+                    st.write(f"{status_icon} `{doc_name}` · {doc_status_val}")
+                    if doc_error_val:
+                        st.caption(f"错误：{doc_error_val}")
+                with col_del:
+                    if st.button("🗑️", key=f"del_doc_{doc_id}", help="删除此文档"):
+                        with SessionLocal() as db:
+                            doc_obj = db.query(models.Document).filter(
+                                models.Document.id == doc_id
+                            ).first()
+                            if doc_obj:
+                                try:
+                                    Path(doc_obj.storage_path).unlink(missing_ok=True)
+                                except Exception:
+                                    pass
+                                db.query(models.Chunk).filter(
+                                    models.Chunk.document_id == doc_id
+                                ).delete()
+                                db.delete(doc_obj)
+                                db.commit()
+                        st.toast(f"已删除：{doc_name}", icon="🗑️")
+                        st.rerun()
 
 
 with col2:
